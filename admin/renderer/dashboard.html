@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Waterboys — Status</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>Waterboys Status</h1>
+      <div class="meta" id="last-checked">—</div>
+    </header>
+
+    <main>
+      <div id="banner" class="banner">Checking…</div>
+
+      <div class="cards" id="cards"></div>
+
+      <div class="action-row">
+        <button id="btn-refresh">Refresh now</button>
+        <button class="secondary" id="btn-restart-server">Restart server</button>
+        <button class="secondary" id="btn-restart-tunnel">Restart tunnel</button>
+        <button class="secondary" id="btn-change-pw">Change password</button>
+        <button class="secondary" id="btn-wizard">Re-run setup</button>
+        <button class="secondary" id="btn-logs">Open logs folder</button>
+        <div class="spacer"></div>
+        <button class="danger" id="btn-uninstall">Uninstall services</button>
+      </div>
+
+      <div class="errors">
+        <h3>Recent errors</h3>
+        <div id="errors-body" class="empty">none</div>
+      </div>
+    </main>
+  </div>
+  <script src="dashboard.js"></script>
+</body>
+</html>

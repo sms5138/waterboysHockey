@@ -9,9 +9,9 @@ const { issueToken, verifyPassword, requireAuth } = require('./auth');
 const { buildTree } = require('./tree');
 const { sendFile } = require('./stream');
 
-const configPath = path.join(__dirname, 'config.json');
+const configPath = process.env.WATERBOYS_CONFIG || path.join(__dirname, 'config.json');
 if (!fs.existsSync(configPath)) {
-  console.error('config.json not found. Copy config.example.json to config.json and edit it.');
+  console.error(`config.json not found at ${configPath}. Run the Waterboys setup wizard, or copy config.example.json to config.json.`);
   process.exit(1);
 }
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));

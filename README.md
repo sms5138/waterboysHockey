@@ -14,12 +14,17 @@ Browser  →  waterboyshockey.com (GitHub Pages)
 
 - [docs/](docs/) — the static site served by GitHub Pages (apex: `waterboyshockey.com`)
 - [server/](server/) — the Node.js app that runs on the Windows server
+- [admin/](admin/) — the GUI installer + status dashboard (Electron app) that wraps the server
 
 ## Setup at a glance
 
-1. **Server side** — see [server/README.md](server/README.md) for the Windows install steps: Node.js, npm install, password hash, Cloudflare Tunnel pointed at `api.waterboyshockey.com`.
+1. **Server side** — easiest path: download `WaterboysSetup-<version>.exe` from the GitHub Releases page on your Windows PC and run it. The installer launches a setup wizard that picks the video folder, sets the team password, creates the Cloudflare Tunnel, and registers everything as Windows services. See [server/README.md](server/README.md) if you'd rather do the manual install.
 2. **Site side** — already wired up: [docs/CNAME](docs/CNAME) sets the custom domain, [docs/config.js](docs/config.js) points at the API. In GitHub repo Settings → Pages, set source to **Deploy from branch: `main` /docs**, then add the DNS records described in the server README.
 3. Open `https://waterboyshockey.com`, sign in with the team password.
+
+## Status dashboard
+
+The installed Waterboys app runs in the system tray with a colored dot showing overall health. Click it to open a dashboard with four indicators — **local server**, **Cloudflare tunnel service**, **public reachability** (an actual fetch of `https://api.waterboyshockey.com/api/health`), and **video folder**. Recent errors from both log files are shown inline. From there you can restart either service, change the team password, or re-run the wizard.
 
 ## Customizing the look
 

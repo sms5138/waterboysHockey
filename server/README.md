@@ -16,6 +16,25 @@ Both are stable and won't rotate between restarts.
 - Node server listening on `localhost:8088` (Plex stays on 32400, no conflict).
 - A Cloudflare Tunnel publishing it at `https://api.waterboyshockey.com`.
 - Both running as Windows services so they survive reboots.
+- A "Waterboys" tray icon with a status dashboard (server up? tunnel up? site reachable? video folder OK?).
+
+## Recommended: GUI installer
+
+Download `WaterboysSetup-<version>.exe` from the repo's GitHub Releases page and run it on your Windows PC.
+
+A setup wizard walks you through:
+
+1. Installing missing prerequisites (`node`, `cloudflared`, `nssm`) via winget.
+2. Picking the video folder.
+3. Setting the team password.
+4. Confirming the port and allowed origin.
+5. Signing in to Cloudflare and creating the named tunnel + DNS record.
+6. Registering both Windows services and starting them.
+7. Verifying end-to-end with live status checks.
+
+After install the app sits in the system tray; click it for the status dashboard. The wizard can be re-run any time from the tray menu.
+
+The rest of this README documents the manual install path — useful for debugging or when you'd rather not run the GUI.
 
 ## Prerequisite — domain on Cloudflare
 

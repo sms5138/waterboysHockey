@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Waterboys — Setup</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>Waterboys Setup</h1>
+      <div class="meta" id="platform-note"></div>
+    </header>
+
+    <main>
+      <div class="wizard-stepper" id="stepper"></div>
+      <div id="step-host"></div>
+    </main>
+
+    <footer class="actions">
+      <button class="secondary" id="btn-back">Back</button>
+      <div class="spacer"></div>
+      <button class="secondary" id="btn-skip" style="display:none">Skip</button>
+      <button id="btn-next">Next</button>
+    </footer>
+  </div>
+  <script src="wizard.js"></script>
+</body>
+</html>
