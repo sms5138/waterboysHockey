@@ -1,6 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+const COOKIE_NAME = 'waterboys_session';
+
 function issueToken(config) {
   const ttlSeconds = (config.tokenTtlHours || 12) * 3600;
   const token = jwt.sign({ scope: 'team' }, config.jwtSecret, {
@@ -8,7 +10,7 @@ function issueToken(config) {
     expiresIn: ttlSeconds
   });
   const expiresAt = Date.now() + ttlSeconds * 1000;
-  return { token, expiresAt };
+  return { token, expiresAt, ttlSeconds };
 }
 
 async function verifyPassword(submitted, hash) {
@@ -17,11 +19,41 @@ async function verifyPassword(submitted, hash) {
   return bcrypt.compare(submitted, hash);
 }
 
+function buildCookie(value, ttlSeconds, config) {
+  const parts = [
+    `${COOKIE_NAME}=${value}`,
+    'HttpOnly',
+    'Secure',
+    'SameSite=None',
+    'Path=/api',
+    `Max-Age=${ttlSeconds}`
+  ];
+  if (config.cookieDomain) parts.push(`Domain=${config.cookieDomain}`);
+  return parts.join('; ');
+}
+
+function setSessionCookie(res, token, ttlSeconds, config) {
+  res.setHeader('Set-Cookie', buildCookie(token, ttlSeconds, config));
+}
+
+function clearSessionCookie(res, config) {
+  res.setHeader('Set-Cookie', buildCookie('', 0, config));
+}
+
+function readCookieToken(req) {
+  const header = req.headers.cookie || '';
+  const re = new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`);
+  const m = re.exec(header);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 function requireAuth(config) {
   return (req, res, next) => {
-    const header = req.headers.authorization || '';
-    const bearer = header.startsWith('Bearer ') ? header.slice(7) : null;
-    const token = bearer || req.query.token;
+    let token = readCookieToken(req);
+    if (!token) {
+      const header = req.headers.authorization || '';
+      if (header.startsWith('Bearer ')) token = header.slice(7);
+    }
     if (!token) return res.status(401).json({ error: 'missing token' });
 
     try {
@@ -33,4 +65,11 @@ function requireAuth(config) {
   };
 }
 
-module.exports = { issueToken, verifyPassword, requireAuth };
+module.exports = {
+  COOKIE_NAME,
+  issueToken,
+  verifyPassword,
+  requireAuth,
+  setSessionCookie,
+  clearSessionCookie
+};

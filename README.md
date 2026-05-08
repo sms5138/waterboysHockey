@@ -24,7 +24,11 @@ Browser  →  waterboyshockey.com (GitHub Pages)
 
 ## Status dashboard
 
-The installed Waterboys app runs in the system tray with a colored dot showing overall health. Click it to open a dashboard with four indicators — **local server**, **Cloudflare tunnel service**, **public reachability** (an actual fetch of `https://api.waterboyshockey.com/api/health`), and **video folder**. Recent errors from both log files are shown inline. From there you can restart either service, change the team password, or re-run the wizard.
+The installed Waterboys app runs in the system tray with a colored dot showing overall health. Click it to open a dashboard with five indicators — **local server**, **Cloudflare tunnel service**, **public reachability** (an actual fetch of `https://api.waterboyshockey.com/api/health`), **video folder**, and **hardening** (whether the service account, NTFS ACLs, and outbound firewall rules are in place). Recent errors from both log files are shown inline. From there you can restart either service, change the team password, or re-run the wizard.
+
+## Security
+
+The installer runs everything as a dedicated low-privilege Windows user (`WaterboysSvc`), with NTFS read-only on the video folder and explicit deny ACEs on Plex's data dirs and the user profile. A Windows Firewall block-rule keeps the service from initiating any outbound traffic except loopback (cloudflared has its own allow-rule). See [docs/HARDENING.md](docs/HARDENING.md) for what the wizard automates, the optional Cloudflare Access setup, and a list of things you should never expose through the tunnel.
 
 ## Customizing the look
 

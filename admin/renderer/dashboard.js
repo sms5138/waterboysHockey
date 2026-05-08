@@ -14,7 +14,7 @@ function bannerText(overall) {
 }
 
 function renderCards(state) {
-  const items = [state.local, state.tunnel, state.e2e, state.folder].filter(Boolean);
+  const items = [state.local, state.tunnel, state.e2e, state.folder, state.hardening].filter(Boolean);
   $('cards').innerHTML = items.map(item => `
     <div class="card">
       <div class="title-row">
@@ -71,6 +71,8 @@ async function changePassword() {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  api.app.version().then((v) => { $('app-version').textContent = `v${v}`; });
+
   $('btn-refresh').onclick = refresh;
   $('btn-restart-server').onclick = async () => {
     $('btn-restart-server').disabled = true;
@@ -87,11 +89,35 @@ window.addEventListener('DOMContentLoaded', async () => {
   $('btn-change-pw').onclick = changePassword;
   $('btn-wizard').onclick = () => api.app.openWizard();
   $('btn-logs').onclick = () => api.logs.openFolder();
-  $('btn-uninstall').onclick = async () => {
-    if (!confirm('Stop and remove both Windows services?')) return;
-    await api.services.uninstall();
-    refresh();
+  $('btn-uninstall').onclick = () => { $('uninstall-modal').hidden = false; };
+  $('uninstall-cancel').onclick = () => { $('uninstall-modal').hidden = true; };
+
+  $('uninstall-confirm').onclick = async () => {
+    const opts = {
+      removeFirewallRules: $('opt-fw').checked,
+      restorePermissions:  $('opt-acl').checked,
+      removeServiceUser:   $('opt-user').checked,
+      deleteTunnel:        $('opt-tunnel').checked,
+      deleteConfigData:    $('opt-data').checked
+    };
+    const log = $('uninstall-log');
+    log.hidden = false;
+    log.textContent = '';
+    $('uninstall-confirm').disabled = true;
+
+    const off = api.app.onUninstallProgress((step) => {
+      const mark = step.state === 'ok' ? '✓' : step.state === 'fail' ? '✗' : '…';
+      log.textContent += `${mark} ${step.label}\n`;
+    });
+
+    await api.app.fullUninstall(opts);
+    off();
+
+    $('uninstall-confirm').hidden = true;
+    $('uninstall-finalize').hidden = false;
   };
+
+  $('uninstall-finalize').onclick = () => api.app.runWindowsUninstaller();
 
   api.health.onUpdate((state) => {
     renderBanner(state);

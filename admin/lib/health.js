@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const services = require('./services');
+const firewall = require('./firewall');
 
 const TIMEOUT_MS = 4000;
 
@@ -89,18 +90,43 @@ async function videoFolder() {
   };
 }
 
+async function hardeningCheck() {
+  const cfg = config.read();
+  const h = cfg.hardening || {};
+  let firewallOk = false;
+  try {
+    const fw = await firewall.rulesPresent();
+    firewallOk = fw.node && fw.loopback && fw.cloudflared && fw.cloudflaredLan;
+  } catch {}
+  const acctOk = Boolean(h.serviceAccountAppliedAt);
+  const aclsOk = Boolean(h.aclsAppliedAt);
+  const all = acctOk && aclsOk && firewallOk;
+  const partial = acctOk || aclsOk || firewallOk;
+  const missing = [];
+  if (!acctOk)     missing.push('service account');
+  if (!aclsOk)     missing.push('folder ACLs');
+  if (!firewallOk) missing.push('firewall rules');
+  return {
+    label: 'Hardening',
+    state: all ? 'ok' : (partial ? 'warn' : 'missing'),
+    detail: all ? 'service account, ACLs, firewall all applied'
+                : `not applied: ${missing.join(', ')}`
+  };
+}
+
 async function all() {
-  const [local, tunnel, e2e, folder] = await Promise.all([
+  const [local, tunnel, e2e, folder, hardening] = await Promise.all([
     localServer(),
     tunnelService(),
     endToEnd(),
-    videoFolder()
+    videoFolder(),
+    hardeningCheck()
   ]);
-  const states = [local.state, tunnel.state, e2e.state, folder.state];
+  const states = [local.state, tunnel.state, e2e.state, folder.state, hardening.state];
   let overall = 'ok';
-  if (states.some(s => s === 'down' || s === 'missing')) overall = 'down';
-  else if (states.some(s => s === 'warn')) overall = 'warn';
-  return { overall, local, tunnel, e2e, folder, at: new Date().toISOString() };
+  if (states.some(s => s === 'down')) overall = 'down';
+  else if (states.some(s => s === 'warn' || s === 'missing')) overall = 'warn';
+  return { overall, local, tunnel, e2e, folder, hardening, at: new Date().toISOString() };
 }
 
-module.exports = { all, localServer, tunnelService, endToEnd, videoFolder };
+module.exports = { all, localServer, tunnelService, endToEnd, videoFolder, hardeningCheck };

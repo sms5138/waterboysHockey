@@ -1,13 +1,16 @@
 {
   "name": "waterboys-admin",
-  "version": "1.0.0",
+  "version": "1.0.8",
   "private": true,
   "description": "GUI installer and status dashboard for the Waterboys video server",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win nsis",
-    "build:dir": "electron-builder --win nsis --dir"
+    "icons": "node scripts/make-icons.js",
+    "bump": "node scripts/bump-version.js",
+    "build": "npm run bump && electron-builder --win nsis --x64",
+    "build:dir": "npm run bump && electron-builder --win nsis --x64 --dir",
+    "build:nobump": "electron-builder --win nsis --x64"
   },
   "engines": {
     "node": ">=18"
@@ -17,8 +20,8 @@
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
-    "electron": "^31.3.1",
-    "electron-builder": "^24.13.3"
+    "electron": "^42.0.0",
+    "electron-builder": "^26.0.0"
   },
   "build": {
     "appId": "com.waterboyshockey.admin",
@@ -34,6 +37,7 @@
       "preload.js",
       "lib/**/*",
       "renderer/**/*",
+      "build/*.ico",
       "package.json"
     ],
     "extraResources": [
@@ -49,10 +53,13 @@
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "WaterboysSetup-${version}.${ext}"
@@ -63,7 +70,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Waterboys"
+      "shortcutName": "Waterboys",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "include": "build/installer.nsh"
     }
   }
 }

@@ -10,7 +10,15 @@ contextBridge.exposeInMainWorld('api', {
     selectFolder:  (defaultPath) => invoke('app:select-folder', defaultPath),
     openWizard:    () => invoke('app:open-wizard'),
     openDashboard: () => invoke('app:open-dashboard'),
-    platform:      () => invoke('app:platform')
+    platform:      () => invoke('app:platform'),
+    version:       () => invoke('app:version'),
+    fullUninstall: (options) => invoke('app:full-uninstall', options),
+    runWindowsUninstaller: () => invoke('app:run-windows-uninstaller'),
+    onUninstallProgress: (handler) => {
+      const listener = (_e, step) => handler(step);
+      ipcRenderer.on('app:uninstall-progress', listener);
+      return () => ipcRenderer.removeListener('app:uninstall-progress', listener);
+    }
   },
   config: {
     summary: () => invoke('config:summary'),
@@ -58,5 +66,12 @@ contextBridge.exposeInMainWorld('api', {
     tail:          (name, lines) => invoke('logs:tail', name, lines),
     recentErrors:  (n) => invoke('logs:recent-errors', n),
     openFolder:    () => invoke('logs:open-folder')
+  },
+  hardening: {
+    applyServiceAccount:    () => invoke('hardening:apply-service-account'),
+    applyAcls:              () => invoke('hardening:apply-acls'),
+    applyFirewall:          () => invoke('hardening:apply-firewall'),
+    status:                 () => invoke('hardening:status'),
+    acknowledgeCfAccess:    (ack) => invoke('hardening:acknowledge-cf-access', ack)
   }
 });

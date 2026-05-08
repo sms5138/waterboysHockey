@@ -8,8 +8,16 @@ const DEFAULTS = {
   passwordHash: '',
   jwtSecret: '',
   allowedOrigin: 'https://waterboyshockey.com',
+  cookieDomain: '',
   videoExtensions: ['.mp4', '.mov', '.mkv', '.m4v', '.webm'],
-  tokenTtlHours: 12
+  tokenTtlHours: 12,
+  hardening: {
+    serviceAccount: '',
+    serviceAccountAppliedAt: null,
+    aclsAppliedAt: null,
+    firewallAppliedAt: null,
+    cloudflareAccessAcknowledged: false
+  }
 };
 
 function ensureDir() {

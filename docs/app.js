@@ -2,8 +2,8 @@
   const cfg = window.WATERBOYS_CONFIG || {};
   const API = (cfg.API_BASE_URL || '').replace(/\/$/, '');
 
-  const TOKEN_KEY = 'waterboys.token';
   const EXPIRES_KEY = 'waterboys.expiresAt';
+  const LEGACY_TOKEN_KEY = 'waterboys.token';
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -31,6 +31,14 @@
     status: $('status')
   };
 
+  // <video> needs `crossorigin="use-credentials"` to forward the auth cookie
+  // on cross-origin range requests. Setting this on the element instead of
+  // the markup keeps existing index.html untouched.
+  if (els.player) els.player.crossOrigin = 'use-credentials';
+
+  // Drop any legacy token left behind from the pre-cookie release.
+  try { localStorage.removeItem(LEGACY_TOKEN_KEY); } catch {}
+
   let tree = null;
   let currentDivision = null;
   let currentSeason = null;
@@ -43,30 +51,28 @@
     statusTimer = setTimeout(() => els.status.classList.remove('show'), 3000);
   }
 
-  function getToken() {
-    const token = localStorage.getItem(TOKEN_KEY);
+  function getExpiresAt() {
     const expiresAt = parseInt(localStorage.getItem(EXPIRES_KEY) || '0', 10);
-    if (!token || !expiresAt || Date.now() >= expiresAt) return null;
-    return token;
+    if (!expiresAt || Date.now() >= expiresAt) return null;
+    return expiresAt;
   }
 
-  function setToken(token, expiresAt) {
-    localStorage.setItem(TOKEN_KEY, token);
+  function setExpiresAt(expiresAt) {
     localStorage.setItem(EXPIRES_KEY, String(expiresAt));
   }
 
-  function clearToken() {
-    localStorage.removeItem(TOKEN_KEY);
+  function clearExpiresAt() {
     localStorage.removeItem(EXPIRES_KEY);
   }
 
   async function api(pathAndQuery, opts = {}) {
-    const token = getToken();
-    const headers = { ...(opts.headers || {}) };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(`${API}${pathAndQuery}`, { ...opts, headers });
+    const res = await fetch(`${API}${pathAndQuery}`, {
+      credentials: 'include',
+      ...opts,
+      headers: { ...(opts.headers || {}) }
+    });
     if (res.status === 401) {
-      clearToken();
+      clearExpiresAt();
       showLogin();
       throw new Error('session expired');
     }
@@ -103,6 +109,7 @@
     try {
       const res = await fetch(`${API}/api/login`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: els.password.value })
       });
@@ -111,8 +118,8 @@
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || 'Wrong password.');
       }
-      const { token, expiresAt } = await res.json();
-      setToken(token, expiresAt);
+      const { expiresAt } = await res.json();
+      setExpiresAt(expiresAt);
       showBrowser();
       await loadTree();
     } catch (err) {
@@ -122,8 +129,11 @@
     }
   });
 
-  els.signoutBtn.addEventListener('click', () => {
-    clearToken();
+  els.signoutBtn.addEventListener('click', async () => {
+    try {
+      await fetch(`${API}/api/logout`, { method: 'POST', credentials: 'include' });
+    } catch { /* server unreachable; clear local state anyway */ }
+    clearExpiresAt();
     tree = null;
     currentDivision = null;
     currentSeason = null;
@@ -266,10 +276,9 @@
   }
 
   function playVideo(v) {
-    const token = getToken();
-    if (!token) { showLogin(); return; }
+    if (!getExpiresAt()) { showLogin(); return; }
     els.playerTitle.textContent = v.name;
-    els.player.src = `${API}/api/file?path=${encodeURIComponent(v.path)}&token=${encodeURIComponent(token)}`;
+    els.player.src = `${API}/api/file?path=${encodeURIComponent(v.path)}`;
     els.playerOverlay.hidden = false;
     els.player.play().catch(() => { /* autoplay may be blocked; user can press play */ });
   }
@@ -290,9 +299,8 @@
   });
 
   function downloadVideo(v) {
-    const token = getToken();
-    if (!token) { showLogin(); return; }
-    const url = `${API}/api/download?path=${encodeURIComponent(v.path)}&token=${encodeURIComponent(token)}`;
+    if (!getExpiresAt()) { showLogin(); return; }
+    const url = `${API}/api/download?path=${encodeURIComponent(v.path)}`;
     const a = document.createElement('a');
     a.href = url;
     a.download = v.name;
@@ -322,7 +330,7 @@
   }
 
   // Boot
-  if (getToken()) {
+  if (getExpiresAt()) {
     showBrowser();
     loadTree();
   } else {

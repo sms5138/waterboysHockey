@@ -14,6 +14,7 @@ const STEPS = [
   { id: 'network',   title: 'Network',     render: renderNetwork },
   { id: 'tunnel',    title: 'Tunnel',      render: renderTunnel },
   { id: 'services',  title: 'Services',    render: renderServices },
+  { id: 'hardening', title: 'Hardening',   render: renderHardening },
   { id: 'verify',    title: 'Verify',      render: renderVerify }
 ];
 
@@ -265,20 +266,43 @@ async function renderNetwork(el, data) {
 }
 
 async function renderTunnel(el, data) {
-  const summary = await api.tunnel.summary();
+  // Skeleton first so the user never sees an empty panel if cloudflared is slow.
+  el.innerHTML = panel('Cloudflare Tunnel', 'Checking cloudflared status…', '');
+
+  let summary;
+  try {
+    summary = await Promise.race([
+      api.tunnel.summary(),
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error('cloudflared status check timed out after 60s')), 60_000
+      ))
+    ]);
+  } catch (err) {
+    summary = { installed: false, loggedIn: false, tunnel: null, error: err.message };
+  }
+
   data.tunnelHostname = data.tunnelHostname || (data.allowedOrigin
     ? data.allowedOrigin.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '').replace(/^/, 'api.')
     : 'api.waterboyshockey.com');
 
+  const warningBanner = summary.error
+    ? `<div class="banner warn" style="margin-bottom:12px">⚠️ ${escapeHtml(summary.error)}. Try clicking <strong>Refresh</strong> below, or run <code>cloudflared tunnel list</code> in PowerShell to see what's wrong.</div>`
+    : (summary.tunnelLookupFailed
+        ? `<div class="banner warn" style="margin-bottom:12px">⚠️ Couldn't fetch the tunnel list from Cloudflare. The cert may be present but the API call failed or timed out.</div>`
+        : '');
+
   el.innerHTML = panel('Cloudflare Tunnel',
     'Creates a named tunnel and points api.waterboyshockey.com at this PC. You only do this once.',
-    `<div class="field">
+    `${warningBanner}
+     <div class="field">
        <label>1. Sign in to Cloudflare</label>
        <div class="row">
-         <div>${statusDot(summary.loggedIn ? 'ok' : 'down')} ${summary.loggedIn ? 'Already signed in' : 'Not signed in'}</div>
+         <div id="login-state">${statusDot(summary.loggedIn ? 'ok' : 'down')} ${summary.loggedIn ? 'Already signed in' : 'Not signed in'}</div>
          <button id="btn-login" class="secondary" style="flex: 0 0 auto" ${summary.loggedIn ? 'disabled' : ''}>Sign in…</button>
+         <button id="btn-login-refresh" class="secondary" style="flex: 0 0 auto" title="Re-check cert.pem (use after running cloudflared tunnel login manually)">Refresh</button>
        </div>
        <pre class="log" id="login-log" style="display:none"></pre>
+       <div class="help">If sign-in keeps failing, open PowerShell and run <code>cloudflared tunnel login</code> directly. After it succeeds, click Refresh.</div>
      </div>
      <div class="field">
        <label>2. Tunnel</label>
@@ -300,14 +324,31 @@ async function renderTunnel(el, data) {
     btn.textContent = 'Waiting for browser…';
     const logEl = document.getElementById('login-log');
     logEl.style.display = 'block';
-    logEl.textContent = '';
+    logEl.textContent = 'Spawning cloudflared tunnel login…\n';
     const off = api.tunnel.onProgress((p) => { logEl.textContent += p.chunk; });
     const r = await api.tunnel.login();
     off();
+    logEl.textContent += `\n[exit code: ${r.code}]\n`;
+    if (r.error) logEl.textContent += `\n${r.error}\n`;
     if (!r.ok) {
-      alert('Login failed. Check the log for details.');
+      btn.disabled = false;
+      btn.textContent = 'Retry sign in';
+      alert(r.error || 'cloudflared login failed. See log below the button for details.');
     } else {
       btn.textContent = 'Signed in';
+      document.getElementById('login-state').innerHTML = `${statusDot('ok')} Signed in`;
+    }
+  };
+
+  document.getElementById('btn-login-refresh').onclick = async () => {
+    const s = await api.tunnel.summary();
+    if (s.loggedIn) {
+      document.getElementById('login-state').innerHTML = `${statusDot('ok')} Signed in`;
+      const loginBtn = document.getElementById('btn-login');
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Signed in';
+    } else {
+      document.getElementById('login-state').innerHTML = `${statusDot('down')} Still not signed in`;
     }
   };
 
@@ -364,13 +405,15 @@ async function renderServices(el) {
     btn.textContent = 'Installing…';
     const logEl = document.getElementById('svc-log');
     logEl.style.display = 'block';
+    logEl.textContent = '';
     const r = await api.services.install();
-    logEl.textContent = (r.steps || []).map(s =>
-      `[${s.code === 0 ? 'ok' : 'fail'}] ${s.label}\n  stdout: ${s.stdout}\n  stderr: ${s.stderr}`
-    ).join('\n\n');
+    const errorBlock = r.error ? `[error] ${r.error}\n\n` : '';
+    const stepLines = (r.steps || []).map(s => {
+      const tag = s.code === 0 ? 'ok' : (s.allowFail ? 'skipped' : 'fail');
+      return `[${tag}] ${s.label}\n  ${s.stdout || '(no output)'}`;
+    }).join('\n\n');
+    logEl.textContent = (errorBlock + stepLines).trim() || '(no output returned)';
     if (r.ok) {
-      await api.services.start('WaterboysVideoServer');
-      await api.services.start('WaterboysCloudflared');
       btn.textContent = 'Installed';
       installed = true;
     } else {
@@ -385,6 +428,100 @@ async function renderServices(el) {
       const status = await api.services.status();
       if (status.server.installed && status.tunnel.installed) return true;
       return confirm('Services not installed yet. Continue anyway?');
+    }
+  };
+}
+
+async function renderHardening(el) {
+  const platform = await api.app.platform();
+  el.innerHTML = panel('Lock down the box',
+    'Three steps narrow the service’s reach to just the video folder and block all other network traffic.',
+    `<div id="hardening-panels">
+       <div class="card" style="margin-bottom: 10px">
+         <div class="title-row" id="row-svc">${statusDot('busy')}<div class="label">1. Dedicated service account</div></div>
+         <div class="muted">Drops the service from LocalSystem to a low-privilege local user (WaterboysSvc).</div>
+         <pre class="log" id="log-svc" style="display:none"></pre>
+         <div style="margin-top: 10px"><button id="btn-svc">Apply</button></div>
+       </div>
+       <div class="card" style="margin-bottom: 10px">
+         <div class="title-row" id="row-acl">${statusDot('busy')}<div class="label">2. Folder permissions</div></div>
+         <div class="muted">Read-only on videoRoot, deny on Plex data folders and your user profile.</div>
+         <pre class="log" id="log-acl" style="display:none"></pre>
+         <div style="margin-top: 10px"><button id="btn-acl">Apply</button></div>
+       </div>
+       <div class="card" style="margin-bottom: 10px">
+         <div class="title-row" id="row-fw">${statusDot('busy')}<div class="label">3. Outbound network lockdown</div></div>
+         <div class="muted">Blocks node.exe outbound except loopback. cloudflared keeps its outbound to Cloudflare.</div>
+         <pre class="log" id="log-fw" style="display:none"></pre>
+         <div style="margin-top: 10px"><button id="btn-fw">Apply</button></div>
+       </div>
+       <div class="card">
+         <div class="title-row">${statusDot('warn')}<div class="label">Optional: Cloudflare Access</div></div>
+         <div class="muted">Adds a second auth gate at the Cloudflare edge — free for up to 50 users. Configure in the Zero Trust dashboard.</div>
+         <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center">
+           <button class="secondary" id="btn-cf-open">Open Zero Trust dashboard</button>
+           <label style="display: inline-flex; align-items: center; gap: 6px; margin: 0; text-transform: none; letter-spacing: 0">
+             <input type="checkbox" id="cf-ack" /> I’ve set this up
+           </label>
+         </div>
+       </div>
+     </div>`
+  );
+
+  if (platform !== 'win32') {
+    document.querySelectorAll('#hardening-panels button[id^=btn-svc],#hardening-panels button[id^=btn-acl],#hardening-panels button[id^=btn-fw]')
+      .forEach(b => { b.disabled = true; b.title = 'Windows-only'; });
+  }
+
+  const refreshStatus = async () => {
+    const s = await api.hardening.status();
+    document.getElementById('row-svc').firstElementChild.className =
+      `dot ${s.serviceAccountAppliedAt ? 'ok' : 'warn'}`;
+    document.getElementById('row-acl').firstElementChild.className =
+      `dot ${s.aclsAppliedAt ? 'ok' : 'warn'}`;
+    const fw = s.firewallRulesPresent || {};
+    const fwOk = fw.node && fw.loopback && fw.cloudflared && fw.cloudflaredLan;
+    document.getElementById('row-fw').firstElementChild.className =
+      `dot ${fwOk ? 'ok' : 'warn'}`;
+    document.getElementById('cf-ack').checked = !!s.cloudflareAccessAcknowledged;
+  };
+  await refreshStatus();
+
+  const wireApply = (btnId, logId, fn) => {
+    document.getElementById(btnId).onclick = async () => {
+      const btn = document.getElementById(btnId);
+      const logEl = document.getElementById(logId);
+      btn.disabled = true; btn.textContent = 'Applying…';
+      logEl.style.display = 'block';
+      logEl.textContent = '';
+      const r = await fn();
+      const steps = (r && r.steps) || [];
+      logEl.textContent = steps.map(s =>
+        `[${s.code === 0 ? 'ok' : 'fail'}] ${s.label || (s.args || []).join(' ')}\n  ${s.stdout || ''}\n  ${s.stderr || ''}`
+      ).join('\n\n') || (r && r.error) || '(no output)';
+      btn.disabled = false; btn.textContent = (r && r.ok) ? 'Done' : 'Retry';
+      await refreshStatus();
+    };
+  };
+
+  wireApply('btn-svc', 'log-svc', () => api.hardening.applyServiceAccount());
+  wireApply('btn-acl', 'log-acl', () => api.hardening.applyAcls());
+  wireApply('btn-fw',  'log-fw',  () => api.hardening.applyFirewall());
+
+  document.getElementById('btn-cf-open').onclick =
+    () => api.app.openExternal('https://one.dash.cloudflare.com/');
+  document.getElementById('cf-ack').onchange = (e) =>
+    api.hardening.acknowledgeCfAccess(e.target.checked);
+
+  return {
+    skippable: true,
+    validate: async () => {
+      const s = await api.hardening.status();
+      const fw = s.firewallRulesPresent || {};
+      const allDone = s.serviceAccountAppliedAt && s.aclsAppliedAt
+                    && fw.node && fw.loopback && fw.cloudflared && fw.cloudflaredLan;
+      if (allDone) return true;
+      return confirm('One or more hardening steps haven\'t been applied. Continue anyway?');
     }
   };
 }
@@ -421,6 +558,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   btnBack().onclick = back;
   btnNext().onclick = next;
   btnSkip().onclick = skip;
+  api.app.version().then((v) => { document.getElementById('app-version').textContent = `v${v}`; });
   const platform = await api.app.platform();
   if (platform !== 'win32') {
     document.getElementById('platform-note').textContent = `dev preview on ${platform} — Windows-only steps will be no-ops`;

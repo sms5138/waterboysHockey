@@ -10,7 +10,10 @@
   <div class="app">
     <header class="topbar">
       <h1>Waterboys Status</h1>
-      <div class="meta" id="last-checked">—</div>
+      <div class="meta">
+        <span id="app-version" class="version-badge">—</span>
+        <span id="last-checked">—</span>
+      </div>
     </header>
 
     <main>
@@ -26,7 +29,7 @@
         <button class="secondary" id="btn-wizard">Re-run setup</button>
         <button class="secondary" id="btn-logs">Open logs folder</button>
         <div class="spacer"></div>
-        <button class="danger" id="btn-uninstall">Uninstall services</button>
+        <button class="danger" id="btn-uninstall">Uninstall completely…</button>
       </div>
 
       <div class="errors">
@@ -34,6 +37,30 @@
         <div id="errors-body" class="empty">none</div>
       </div>
     </main>
+
+    <div id="uninstall-modal" class="modal" hidden>
+      <div class="modal-card">
+        <h2>Uninstall Waterboys</h2>
+        <p class="muted">This reverts every change the installer made to your system. Use this if you don't plan to keep using the app.</p>
+
+        <div class="checklist">
+          <label><input type="checkbox" disabled checked /> Stop and remove the Windows services</label>
+          <label><input type="checkbox" id="opt-fw" checked /> Remove Windows Firewall rules</label>
+          <label><input type="checkbox" id="opt-acl" checked /> Restore NTFS permissions</label>
+          <label><input type="checkbox" id="opt-user" checked /> Remove the WaterboysSvc account</label>
+          <label class="optional"><input type="checkbox" id="opt-tunnel" /> Delete the Cloudflare tunnel <span class="muted">(only if not reinstalling)</span></label>
+          <label class="optional"><input type="checkbox" id="opt-data" /> Delete config and logs at %PROGRAMDATA%\Waterboys</label>
+        </div>
+
+        <pre id="uninstall-log" class="log" hidden></pre>
+
+        <div class="modal-actions">
+          <button class="secondary" id="uninstall-cancel">Cancel</button>
+          <button class="danger" id="uninstall-confirm">Uninstall now</button>
+          <button id="uninstall-finalize" hidden>Run Windows uninstaller</button>
+        </div>
+      </div>
+    </div>
   </div>
   <script src="dashboard.js"></script>
 </body>
