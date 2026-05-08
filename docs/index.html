@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Waterboys Hockey Club · Video Hub</title>
+  <meta name="theme-color" content="#041E42" />
+  <meta name="description" content="Private game film library for the Waterboys Hockey Club." />
+  <link rel="icon" href="assets/favicon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <template id="puck-monogram">
+    <svg class="puck" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="50" cy="50" r="46" fill="#041E42" stroke="#FF4C00" stroke-width="4"/>
+      <circle cx="50" cy="50" r="38" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0.35"/>
+      <text x="50" y="61" text-anchor="middle"
+            font-family="Impact, 'Arial Black', sans-serif"
+            font-size="28" font-weight="900" fill="#FF4C00"
+            letter-spacing="-0.5">WHC</text>
+    </svg>
+  </template>
+
+  <header id="app-header" hidden>
+    <div class="brand">
+      <span class="brand-mark brand-mark-sm">
+        <img src="assets/logo.png" alt=""
+             onerror="this.style.display='none'; this.parentElement.classList.add('show-fallback'); this.parentElement.appendChild(document.getElementById('puck-monogram').content.cloneNode(true));" />
+      </span>
+      <span class="brand-text">
+        <span class="wordmark" id="team-name">WATERBOYS</span>
+        <span class="club-name">Hockey Club · Video Hub</span>
+      </span>
+    </div>
+    <button id="signout-btn" type="button">Sign out</button>
+  </header>
+
+  <main id="login-view">
+    <section class="login-card">
+      <img src="assets/banner.png" alt="" class="banner" onerror="this.style.display='none'" />
+      <span class="brand-mark brand-mark-lg">
+        <img src="assets/logo.png" alt=""
+             onerror="this.style.display='none'; this.parentElement.classList.add('show-fallback'); this.parentElement.appendChild(document.getElementById('puck-monogram').content.cloneNode(true));" />
+      </span>
+      <h1 class="wordmark wordmark-lg" id="login-title">WATERBOYS</h1>
+      <p class="club-name club-name-lg">Hockey Club</p>
+      <div class="rule"></div>
+      <p class="tagline">Game Film &amp; Video Hub</p>
+      <form id="login-form">
+        <label for="password">Team password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <button type="submit" id="login-btn">Sign in</button>
+        <p class="error" id="login-error" role="alert"></p>
+      </form>
+    </section>
+  </main>
+
+  <main id="browser-view" hidden>
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+
+    <section class="pane" id="pane-divisions">
+      <h2>Divisions</h2>
+      <ul class="list" id="list-divisions"></ul>
+    </section>
+
+    <section class="pane" id="pane-seasons" hidden>
+      <h2 id="seasons-title">Seasons</h2>
+      <ul class="list" id="list-seasons"></ul>
+    </section>
+
+    <section class="pane" id="pane-videos" hidden>
+      <h2 id="videos-title">Videos</h2>
+      <ul class="list video-list" id="list-videos"></ul>
+    </section>
+  </main>
+
+  <div id="player-overlay" hidden>
+    <div class="player-shell">
+      <div class="player-header">
+        <span id="player-title"></span>
+        <button id="player-close" type="button" aria-label="Close player">✕</button>
+      </div>
+      <video id="player" controls preload="metadata" playsinline></video>
+    </div>
+  </div>
+
+  <p class="status" id="status" role="status"></p>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

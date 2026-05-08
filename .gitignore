@@ -1,0 +1,21 @@
+# Server config holds password hash + JWT secret — never commit
+server/config.json
+
+# Local test video (not for distribution via GitHub Pages)
+testVideo/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp

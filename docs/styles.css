@@ -1,0 +1,281 @@
+/* Waterboys Hockey Club — Edmonton Oilers color theme.
+   Royal blue, orange, and white. */
+:root {
+  --team-primary: #041E42;        /* Oilers royal blue */
+  --team-secondary: #FF4C00;      /* Oilers orange */
+  --team-accent: #FFFFFF;         /* white */
+  --bg: #060f24;                  /* near-black blue */
+  --surface: #0c1a36;
+  --surface-2: #14264a;
+  --text: #f3f5f9;
+  --text-muted: #9aa6bd;
+  --danger: #ff6b6b;
+  --radius: 10px;
+  --shadow: 0 6px 24px rgba(0,0,0,0.45);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  background: var(--team-secondary);
+  color: white;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  transition: filter 0.15s, transform 0.1s;
+}
+button:hover { filter: brightness(1.1); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+a { color: var(--team-secondary); }
+
+/* ---------- Header ---------- */
+header#app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 22px;
+  background: linear-gradient(90deg, var(--team-primary) 0%, var(--team-primary) 55%, var(--team-secondary) 100%);
+  box-shadow: var(--shadow);
+  border-bottom: 3px solid var(--team-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.brand .wordmark { font-size: 1.35rem; }
+.brand .club-name { font-size: 0.72rem; color: rgba(255,255,255,0.85); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+#signout-btn { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); }
+
+/* ---------- Brand mark (logo image OR SVG puck monogram fallback) ---------- */
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.brand-mark .puck { width: 100%; height: 100%; }
+.brand-mark-sm { width: 44px; height: 44px; }
+.brand-mark-lg { width: 120px; height: 120px; margin: 4px auto 10px; }
+
+/* ---------- Wordmark / club name typography ---------- */
+.wordmark {
+  font-family: Impact, "Arial Narrow", "Arial Black", sans-serif;
+  font-weight: 900;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: white;
+  display: block;
+}
+.wordmark-lg {
+  font-size: 2.6rem;
+  letter-spacing: 6px;
+  margin: 6px 0 0;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.25);
+}
+.club-name {
+  color: var(--team-secondary);
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.club-name-lg {
+  margin: 4px 0 0;
+  font-size: 0.95rem;
+}
+.rule {
+  height: 3px;
+  width: 60px;
+  margin: 12px auto;
+  background: var(--team-secondary);
+  border-radius: 2px;
+}
+.tagline {
+  margin: 0 0 18px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-style: italic;
+}
+
+/* ---------- Login ---------- */
+#login-view {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at top, rgba(4,30,66,0.85), transparent 60%),
+    radial-gradient(ellipse at bottom right, rgba(255,76,0,0.35), transparent 60%),
+    var(--bg);
+}
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  padding: 32px 28px 28px;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  text-align: center;
+  border-top: 4px solid var(--team-accent);
+}
+.login-card .banner { width: 100%; max-height: 120px; object-fit: contain; margin-bottom: 6px; }
+.login-card label { display: block; text-align: left; margin: 12px 0 6px; font-size: 0.9rem; color: var(--text-muted); }
+.login-card input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid #2a3a5d;
+  color: var(--text);
+  border-radius: var(--radius);
+  font-size: 1rem;
+}
+.login-card input:focus { outline: 2px solid var(--team-accent); outline-offset: 1px; }
+.login-card button { width: 100%; margin-top: 18px; padding: 12px; font-weight: 600; }
+.login-card .error { color: var(--danger); margin: 10px 0 0; min-height: 1.2em; font-size: 0.9rem; }
+
+/* ---------- Browser ---------- */
+#browser-view {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 22px 80px;
+}
+.breadcrumb {
+  margin-bottom: 16px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.breadcrumb button {
+  background: transparent;
+  color: var(--team-secondary);
+  padding: 4px 8px;
+  font-weight: 500;
+}
+.breadcrumb .sep { color: var(--text-muted); }
+
+.pane h2 {
+  margin: 18px 0 10px;
+  font-size: 1.1rem;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.list li {
+  background: var(--surface);
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: transform 0.1s, background 0.15s;
+  border-left: 4px solid var(--team-secondary);
+}
+.list li.empty {
+  border-left-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  text-align: center;
+  font-style: italic;
+}
+.list li.folder { cursor: pointer; }
+.list li.folder:hover { background: var(--surface-2); transform: translateY(-1px); }
+.list li .name { font-weight: 600; }
+.list li .meta { font-size: 0.8rem; color: var(--text-muted); }
+.list li .actions { display: flex; gap: 6px; }
+.list li .actions button {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  background: var(--team-secondary);
+}
+.list li .actions button.download { background: var(--surface-2); }
+
+.video-list { grid-template-columns: 1fr; }
+.video-list li { flex-direction: row; }
+
+/* ---------- Player ---------- */
+#player-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.player-shell {
+  width: min(100%, 1100px);
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.player-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  font-weight: 600;
+}
+#player-close {
+  background: transparent;
+  color: var(--text);
+  font-size: 1.1rem;
+  padding: 4px 10px;
+}
+#player { width: 100%; max-height: 75vh; display: block; background: black; }
+
+/* ---------- Status toast ---------- */
+.status {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  font-size: 0.9rem;
+}
+.status.show { opacity: 1; }
+
+/* ---------- Mobile tweaks ---------- */
+@media (max-width: 600px) {
+  #browser-view { padding: 16px 14px 60px; }
+  .list { grid-template-columns: 1fr; }
+  .login-card { padding: 24px 20px; }
+  header#app-header { padding: 12px 16px; }
+  .brand .team-name { font-size: 1rem; }
+}
