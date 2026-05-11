@@ -1,4 +1,5 @@
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
 const { run, which } = require('./exec');
@@ -54,32 +55,39 @@ async function ensureServiceUserAndBind() {
   if (!nssm) return { ok: false, error: 'nssm not on PATH' };
 
   const password = crypto.randomBytes(32).toString('hex'); // 64 chars [0-9a-f] — safe in PS single quotes
-  const exists = await userExists(SERVICE_USER);
 
-  // Inline PowerShell that creates or resets the user.
-  const userScript = exists
-    ? [
-        `$pwd = ConvertTo-SecureString '${password}' -AsPlainText -Force`,
-        `Set-LocalUser -Name '${SERVICE_USER}' -Password $pwd`
-      ].join('; ')
-    : [
-        `$pwd = ConvertTo-SecureString '${password}' -AsPlainText -Force`,
-        `New-LocalUser -Name '${SERVICE_USER}' -Password $pwd \``,
-        `  -FullName 'Waterboys Video Server Service' \``,
-        `  -Description 'Runs Waterboys services; no interactive logon' \``,
-        `  -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires | Out-Null`,
-        `Remove-LocalGroupMember -Group 'Users' -Member '${SERVICE_USER}' -ErrorAction SilentlyContinue`
-      ].join('; ');
+  // Write the create-or-reset logic to a temp .ps1 file and run it with -File.
+  // This avoids semicolon/backtick parsing issues, lets us use proper if/else,
+  // and ends with `exit 0` so any harmless warnings (e.g. user-already-in-no-
+  // group when Remove-LocalGroupMember is called) don't taint the exit code.
+  const psLines = [
+    `$ErrorActionPreference = 'SilentlyContinue'`,
+    `$pwd = ConvertTo-SecureString '${password}' -AsPlainText -Force`,
+    `$existing = Get-LocalUser -Name '${SERVICE_USER}' -ErrorAction SilentlyContinue`,
+    `if ($existing) {`,
+    `  Set-LocalUser -Name '${SERVICE_USER}' -Password $pwd | Out-Null`,
+    `  "reset existing user ${SERVICE_USER}"`,
+    `} else {`,
+    `  New-LocalUser -Name '${SERVICE_USER}' -Password $pwd -FullName 'Waterboys Video Server Service' -Description 'Runs Waterboys services; no interactive logon' -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires | Out-Null`,
+    `  "created new user ${SERVICE_USER}"`,
+    `}`,
+    `Remove-LocalGroupMember -Group 'Users' -Member '${SERVICE_USER}' -ErrorAction SilentlyContinue`,
+    `exit 0`
+  ];
+  const userPs1 = path.join(os.tmpdir(), `wb-create-user-${crypto.randomBytes(4).toString('hex')}.ps1`);
+  fs.writeFileSync(userPs1, psLines.join('\r\n') + '\r\n', 'utf8');
 
   const r = await elevate.runElevated([
     {
-      label: exists ? `reset ${SERVICE_USER} password` : `create ${SERVICE_USER}`,
+      label: `ensure ${SERVICE_USER} account`,
       cmd: 'powershell',
-      args: ['-NoProfile', '-Command', userScript]
+      args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', userPs1]
     },
     { label: 'server objectname', cmd: nssm, args: ['set', SERVER_SVC, 'ObjectName', `.\\${SERVICE_USER}`, password] },
     { label: 'tunnel objectname', cmd: nssm, args: ['set', TUNNEL_SVC, 'ObjectName', `.\\${SERVICE_USER}`, password] }
   ]);
+
+  try { fs.unlinkSync(userPs1); } catch {}
 
   if (!r.ok) return r;
 
@@ -111,6 +119,7 @@ async function install() {
   const serverEntry = paths.serverEntry();
   const serverDir   = paths.serverDir();
   const cfgPath     = paths.configFile();
+  const sharedCfYml = paths.sharedCloudflaredConfigYml();
   const serverOut   = path.join(paths.logsDir(), 'server.out.log');
   const serverErr   = path.join(paths.logsDir(), 'server.err.log');
   const tunnelOut   = path.join(paths.logsDir(), 'cloudflared.out.log');
@@ -133,7 +142,10 @@ async function install() {
     { label: 'server stderr',            cmd: nssm, args: ['set', SERVER_SVC, 'AppStderr', serverErr] },
     { label: 'server restart on fail',   cmd: nssm, args: ['set', SERVER_SVC, 'AppExit', 'Default', 'Restart'] },
     { label: 'server restart delay',     cmd: nssm, args: ['set', SERVER_SVC, 'AppRestartDelay', '5000'] },
-    { label: 'install tunnel',           cmd: nssm, args: ['install', TUNNEL_SVC, cloudflared, 'tunnel', 'run', 'waterboys'] },
+    // --config <path> tells cloudflared to use our shared config.yml rather
+    // than fall back to ~/.cloudflared/config.yml, which lives under the
+    // user profile and is unreadable to WaterboysSvc post-hardening.
+    { label: 'install tunnel',           cmd: nssm, args: ['install', TUNNEL_SVC, cloudflared, '--config', sharedCfYml, 'tunnel', 'run', 'waterboys'] },
     { label: 'tunnel autostart',         cmd: nssm, args: ['set', TUNNEL_SVC, 'Start', 'SERVICE_AUTO_START'] },
     { label: 'tunnel stdout',            cmd: nssm, args: ['set', TUNNEL_SVC, 'AppStdout', tunnelOut] },
     { label: 'tunnel stderr',            cmd: nssm, args: ['set', TUNNEL_SVC, 'AppStderr', tunnelErr] },

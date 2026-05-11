@@ -91,19 +91,47 @@ async function create(name = TUNNEL_NAME) {
   return { ok: Boolean(created), id: created && created.id, stdout: r.stdout, stderr: r.stderr };
 }
 
+// Mirror cert.pem and the tunnel credentials JSON into a shared dir that the
+// WaterboysSvc service can read, then write config.yml there pointing at the
+// shared paths. cloudflared service is launched with `--config <this path>`
+// so it never falls back to ~/.cloudflared (which lives in the user profile
+// and is denied to WaterboysSvc by our hardening).
 function writeConfigYml({ tunnelId, hostname, port }) {
-  const credentials = path.join(paths.cloudflaredHome(), `${tunnelId}.json`);
+  const sharedDir = paths.sharedCloudflaredDir();
+  fs.mkdirSync(sharedDir, { recursive: true });
+
+  const userCert = paths.cloudflaredCert();
+  const sharedCert = paths.sharedCloudflaredCert();
+  if (fs.existsSync(userCert)) fs.copyFileSync(userCert, sharedCert);
+
+  const userCreds = path.join(paths.cloudflaredHome(), `${tunnelId}.json`);
+  const sharedCreds = path.join(sharedDir, `${tunnelId}.json`);
+  if (fs.existsSync(userCreds)) fs.copyFileSync(userCreds, sharedCreds);
+
   const doc = {
     tunnel: TUNNEL_NAME,
-    'credentials-file': credentials,
+    'credentials-file': sharedCreds,
+    'origincert': sharedCert,
     ingress: [
       { hostname, service: `http://localhost:${port}` },
       { service: 'http_status:404' }
     ]
   };
-  fs.mkdirSync(paths.cloudflaredHome(), { recursive: true });
-  fs.writeFileSync(paths.cloudflaredConfigYml(), yaml.dump(doc));
-  return paths.cloudflaredConfigYml();
+  const configYmlPath = paths.sharedCloudflaredConfigYml();
+  fs.writeFileSync(configYmlPath, yaml.dump(doc));
+
+  // Also keep the user-profile config.yml in sync so manual `cloudflared
+  // tunnel run waterboys` from a PowerShell session still works for debugging.
+  try {
+    fs.mkdirSync(paths.cloudflaredHome(), { recursive: true });
+    fs.writeFileSync(paths.cloudflaredConfigYml(), yaml.dump({
+      tunnel: TUNNEL_NAME,
+      'credentials-file': userCreds,
+      ingress: doc.ingress
+    }));
+  } catch {}
+
+  return configYmlPath;
 }
 
 async function routeDns(hostname) {

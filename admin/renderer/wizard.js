@@ -496,9 +496,12 @@ async function renderHardening(el) {
       logEl.textContent = '';
       const r = await fn();
       const steps = (r && r.steps) || [];
-      logEl.textContent = steps.map(s =>
-        `[${s.code === 0 ? 'ok' : 'fail'}] ${s.label || (s.args || []).join(' ')}\n  ${s.stdout || ''}\n  ${s.stderr || ''}`
-      ).join('\n\n') || (r && r.error) || '(no output)';
+      const errorBlock = (r && r.error) ? `[error] ${r.error}\n\n` : '';
+      const stepLines = steps.map(s => {
+        const tag = s.code === 0 ? 'ok' : (s.allowFail ? 'skipped' : 'fail');
+        return `[${tag}] ${s.label || (s.args || []).join(' ')}\n  ${s.stdout || '(no output)'}`;
+      }).join('\n\n');
+      logEl.textContent = (errorBlock + stepLines).trim() || '(no output)';
       btn.disabled = false; btn.textContent = (r && r.ok) ? 'Done' : 'Retry';
       await refreshStatus();
     };

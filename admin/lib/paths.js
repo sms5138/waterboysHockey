@@ -45,6 +45,23 @@ function cloudflaredCert() {
   return path.join(cloudflaredHome(), 'cert.pem');
 }
 
+// Shared cloudflared dir that the WaterboysSvc service can read. The user's
+// own ~/.cloudflared is in their profile and our hardening denies the
+// service principal access to user-data folders, so cloudflared running as
+// WaterboysSvc can't read cert.pem or the tunnel credentials JSON from
+// there. We mirror those files into %PROGRAMDATA%\Waterboys\.cloudflared.
+function sharedCloudflaredDir() {
+  return path.join(configDir(), '.cloudflared');
+}
+
+function sharedCloudflaredConfigYml() {
+  return path.join(sharedCloudflaredDir(), 'config.yml');
+}
+
+function sharedCloudflaredCert() {
+  return path.join(sharedCloudflaredDir(), 'cert.pem');
+}
+
 module.exports = {
   PRODUCT,
   isPackaged,
@@ -55,5 +72,8 @@ module.exports = {
   logsDir,
   cloudflaredHome,
   cloudflaredConfigYml,
-  cloudflaredCert
+  cloudflaredCert,
+  sharedCloudflaredDir,
+  sharedCloudflaredConfigYml,
+  sharedCloudflaredCert
 };

@@ -26,9 +26,10 @@ async function runElevated(steps) {
 
   const tmpDir = os.tmpdir();
   const id = crypto.randomBytes(8).toString('hex');
-  const stepsPath   = path.join(tmpDir, `wb-elev-${id}-steps.json`);
-  const scriptPath  = path.join(tmpDir, `wb-elev-${id}.ps1`);
-  const resultsPath = path.join(tmpDir, `wb-elev-${id}-results.json`);
+  const stepsPath    = path.join(tmpDir, `wb-elev-${id}-steps.json`);
+  const scriptPath   = path.join(tmpDir, `wb-elev-${id}.ps1`);
+  const resultsPath  = path.join(tmpDir, `wb-elev-${id}-results.json`);
+  const progressPath = path.join(tmpDir, `wb-elev-${id}-progress.log`);
 
   const normalized = steps.map(s => ({
     label: s.label || s.cmd,
@@ -48,24 +49,29 @@ async function runElevated(steps) {
   const script = `
 $ErrorActionPreference = 'Continue'
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$progressFile = '${progressPath}'
+function Log-Progress($msg) {
+  $line = ('[' + (Get-Date -Format 'HH:mm:ss.fff') + '] ' + $msg + "\`r\`n")
+  Add-Content -Path $progressFile -Value $line -Encoding UTF8
+}
 function Write-JsonFile($path, $obj) {
   $json = $obj | ConvertTo-Json -Depth 10
   [System.IO.File]::WriteAllText($path, $json, $utf8NoBom)
 }
+Log-Progress 'script started'
 try {
   $steps = Get-Content -Raw -LiteralPath '${stepsPath}' | ConvertFrom-Json
   if ($steps -isnot [array]) { $steps = @($steps) }
+  Log-Progress ('parsed ' + $steps.Count + ' step(s)')
   $results = @()
   foreach ($step in $steps) {
     $exe = [string]$step.cmd
     [string[]]$argList = @()
     foreach ($a in $step.args) { $argList += [string]$a }
+    Log-Progress ('begin: ' + $step.label)
     $code = 0
     $out = ''
     try {
-      # Unwrap ErrorRecord objects to their underlying message so the log
-      # doesn't get filled with PowerShell's NativeCommandError stack traces
-      # for tools like nssm that legitimately write info to stderr.
       $out = & $exe @argList 2>&1 | ForEach-Object {
         if ($_ -is [System.Management.Automation.ErrorRecord]) {
           $_.Exception.Message
@@ -79,11 +85,14 @@ try {
       $out = $_.Exception.Message
       $code = -1
     }
+    Log-Progress ('  done: code=' + $code)
     $results += [pscustomobject]@{ label = [string]$step.label; code = [int]$code; output = [string]$out; allowFail = [bool]$step.allowFail }
   }
-  # ConvertTo-Json on a single-element array unwraps to a scalar, so wrap.
+  Log-Progress 'all steps complete; writing results'
   Write-JsonFile '${resultsPath}' @($results)
+  Log-Progress 'results written'
 } catch {
+  Log-Progress ('FATAL: ' + $_.Exception.Message)
   Write-JsonFile '${resultsPath}' @{ error = $_.Exception.Message }
   exit 1
 }
@@ -129,12 +138,9 @@ try {
     parsed = JSON.parse(raw);
     fs.unlinkSync(resultsPath);
   } catch (err) {
-    // The outer powershell exited 0 but the elevated script never produced
-    // a results file. Most common cause: the elevated script crashed before
-    // its catch block (PS parse error, encoding mismatch, etc.). Surface as
-    // much context as we can.
     const psStderr = (r.stderr || '').trim();
     const psStdout = (r.stdout || '').trim();
+    const progressLog = (() => { try { return fs.readFileSync(progressPath, 'utf8'); } catch { return ''; } })();
     return {
       ok: false,
       error: [
@@ -142,11 +148,14 @@ try {
         `read error: ${err.message}`,
         psStderr ? `outer ps stderr: ${psStderr}` : '',
         psStdout ? `outer ps stdout: ${psStdout}` : '',
+        progressLog ? `--- progress log ---\n${progressLog}` : '(no progress log)',
         scriptContent ? `--- elevated script ---\n${scriptContent}` : ''
       ].filter(Boolean).join('\n'),
       steps: []
     };
   }
+  // Cleanup progress log on success.
+  try { fs.unlinkSync(progressPath); } catch {}
 
   if (parsed && parsed.error) {
     return { ok: false, error: parsed.error, steps: [] };

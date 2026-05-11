@@ -28,6 +28,26 @@ function plexCandidates() {
   return out;
 }
 
+// User-data subdirs we want to deny WaterboysSvc on. We NO LONGER deny on
+// the whole USERPROFILE because that also blocks AppData where the Electron
+// app's binary, node.exe, and the cloudflared cert live — and the service
+// principal needs to read those to function.
+function userDataCandidates() {
+  const profile = process.env.USERPROFILE;
+  if (!profile) return [];
+  return [
+    'Documents',
+    'Desktop',
+    'Downloads',
+    'Pictures',
+    'Videos',
+    'Music',
+    'OneDrive',
+    'OneDrive - Personal',
+    'Dropbox'
+  ].map(rel => path.join(profile, rel));
+}
+
 // Apply read-only-on-videoRoot, read-only-on-config, modify-on-logs, deny-on-Plex.
 // All icacls calls run inside one elevated PowerShell session (one UAC prompt).
 async function applyAcls({ videoRoot, configDir, logsDir, userName }) {
@@ -58,8 +78,14 @@ async function applyAcls({ videoRoot, configDir, logsDir, userName }) {
     }
   }
 
-  if (process.env.USERPROFILE && fs.existsSync(process.env.USERPROFILE)) {
-    calls.push({ label: `deny ${userName} on USERPROFILE`, cmd: 'icacls', args: [process.env.USERPROFILE, '/deny', `${userName}:(OI)(CI)(F)`] });
+  // Deny on each user-data subdir that exists. Deliberately scoped — we used
+  // to deny on the whole USERPROFILE but that blocked AppData and broke the
+  // service (it couldn't read its own bundled node.exe / server.js, and
+  // cloudflared couldn't reach the cert in ~/.cloudflared).
+  for (const p of userDataCandidates()) {
+    if (fs.existsSync(p)) {
+      calls.push({ label: `deny ${userName} on ${path.basename(p)}`, cmd: 'icacls', args: [p, '/deny', `${userName}:(OI)(CI)(F)`] });
+    }
   }
 
   return elevate.runElevated(calls);
@@ -67,7 +93,7 @@ async function applyAcls({ videoRoot, configDir, logsDir, userName }) {
 
 async function removeAcls({ videoRoot, configDir, logsDir, userName }) {
   if (process.platform !== 'win32') return { ok: true, steps: [] };
-  const targets = [videoRoot, configDir, logsDir, ...plexCandidates(), process.env.USERPROFILE]
+  const targets = [videoRoot, configDir, logsDir, ...plexCandidates(), ...userDataCandidates()]
     .filter(p => p && fs.existsSync(p));
   const calls = [];
   for (const p of targets) {

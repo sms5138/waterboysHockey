@@ -30,7 +30,10 @@ async function applyFirewallRules({ nodePath, cloudflaredPath, svcSid } = {}) {
     cloudflaredPath = found;
   }
 
-  const userClause = svcSid ? [`user=O:${svcSid}`] : [];
+  // Note: netsh `add rule` does NOT accept a `user=` keyword for outbound
+  // rules — only PowerShell's New-NetFirewallRule -LocalUser supports that.
+  // Scoping by program path alone is sufficient on this dedicated server box
+  // (no other node.exe processes need internet egress here).
 
   const calls = [
     // Idempotency: delete any prior rule with the same name. Expected to fail
@@ -45,7 +48,6 @@ async function applyFirewallRules({ nodePath, cloudflaredPath, svcSid } = {}) {
       `name=${RULE_NODE_BLOCK}`,
       'dir=out', 'action=block',
       `program=${nodePath}`,
-      ...userClause,
       'enable=yes', 'profile=any'
     ]},
 
@@ -54,7 +56,11 @@ async function applyFirewallRules({ nodePath, cloudflaredPath, svcSid } = {}) {
       `name=${RULE_NODE_LOOPBACK}`,
       'dir=out', 'action=allow',
       `program=${nodePath}`,
-      'remoteip=127.0.0.1,::1',
+      // 127.0.0.0/8 covers all IPv4 loopback. We omit IPv6 ::1 because
+      // some netsh builds reject mixed v4/v6 in remoteip without CIDR
+      // suffixes, and Windows Firewall doesn't filter loopback anyway —
+      // this rule is belt-and-suspenders for the deny-all rule above.
+      'remoteip=127.0.0.0/8',
       'enable=yes', 'profile=any'
     ]},
 
