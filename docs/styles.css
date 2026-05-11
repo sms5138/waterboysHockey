@@ -198,6 +198,10 @@ header#app-header {
   transition: transform 0.1s, background 0.15s;
   border-left: 4px solid var(--team-secondary);
 }
+.list li > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .list li.empty {
   border-left-color: transparent;
   background: transparent;
@@ -207,9 +211,9 @@ header#app-header {
 }
 .list li.folder { cursor: pointer; }
 .list li.folder:hover { background: var(--surface-2); transform: translateY(-1px); }
-.list li .name { font-weight: 600; }
+.list li .name { font-weight: 600; word-break: break-word; }
 .list li .meta { font-size: 0.8rem; color: var(--text-muted); }
-.list li .actions { display: flex; gap: 6px; }
+.list li .actions { display: flex; gap: 6px; flex-shrink: 0; }
 .list li .actions button {
   padding: 6px 10px;
   font-size: 0.85rem;
@@ -278,4 +282,17 @@ header#app-header {
   .login-card { padding: 24px 20px; }
   header#app-header { padding: 12px 16px; }
   .brand .team-name { font-size: 1rem; }
+  .video-list li {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .video-list li .actions {
+    justify-content: flex-end;
+  }
+  .video-list li .actions button {
+    flex: 1 1 0;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+  }
 }
