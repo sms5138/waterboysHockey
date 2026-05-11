@@ -38,6 +38,31 @@
       </div>
     </main>
 
+    <div id="pw-modal" class="modal" hidden>
+      <div class="modal-card">
+        <h2>Change password</h2>
+        <p class="muted">Pick which library to update. The other library's password is unaffected. The server restarts after saving.</p>
+
+        <div class="field">
+          <label for="pw-library">Library</label>
+          <select id="pw-library"></select>
+        </div>
+        <div class="field">
+          <label for="pw-new">New password</label>
+          <input type="password" id="pw-new" autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label for="pw-confirm">Confirm</label>
+          <input type="password" id="pw-confirm" autocomplete="new-password" />
+        </div>
+
+        <div class="modal-actions">
+          <button class="secondary" id="pw-cancel">Cancel</button>
+          <button id="pw-save">Save</button>
+        </div>
+      </div>
+    </div>
+
     <div id="uninstall-modal" class="modal" hidden>
       <div class="modal-card">
         <h2>Uninstall Waterboys</h2>

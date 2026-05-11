@@ -1,6 +1,6 @@
 {
   "name": "waterboys-admin",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "private": true,
   "description": "GUI installer and status dashboard for the Waterboys video server",
   "main": "main.js",

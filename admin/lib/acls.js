@@ -48,19 +48,28 @@ function userDataCandidates() {
   ].map(rel => path.join(profile, rel));
 }
 
-// Apply read-only-on-videoRoot, read-only-on-config, modify-on-logs, deny-on-Plex.
-// All icacls calls run inside one elevated PowerShell session (one UAC prompt).
-async function applyAcls({ videoRoot, configDir, logsDir, userName }) {
+// Apply read-only on each library's videoRoot, read-only on config, modify on
+// logs, deny on Plex. All icacls calls run inside one elevated PowerShell
+// session (one UAC prompt).
+async function applyAcls({ videoRoots, configDir, logsDir, userName }) {
   if (process.platform !== 'win32') {
     return { ok: false, error: 'ACLs only apply on Windows', steps: [] };
   }
   if (!userName) throw new Error('userName is required');
-  if (!videoRoot || !fs.existsSync(videoRoot)) {
-    return { ok: false, error: `videoRoot does not exist: ${videoRoot}`, steps: [] };
+  const roots = (Array.isArray(videoRoots) ? videoRoots : [videoRoots]).filter(Boolean);
+  if (roots.length === 0) {
+    return { ok: false, error: 'no video roots configured', steps: [] };
+  }
+  for (const r of roots) {
+    if (!fs.existsSync(r)) {
+      return { ok: false, error: `videoRoot does not exist: ${r}`, steps: [] };
+    }
   }
 
   const calls = [];
-  calls.push({ label: `grant ${userName} RX on videoRoot`, cmd: 'icacls', args: [videoRoot, '/grant:r', `${userName}:(OI)(CI)(RX)`] });
+  for (const root of roots) {
+    calls.push({ label: `grant ${userName} RX on ${path.basename(root)}`, cmd: 'icacls', args: [root, '/grant:r', `${userName}:(OI)(CI)(RX)`] });
+  }
 
   calls.push({ label: `grant ${userName} RX on configDir`, cmd: 'icacls', args: [configDir, '/grant:r', `${userName}:(OI)(CI)(RX)`] });
   const cfgFile = path.join(configDir, 'config.json');
@@ -91,9 +100,10 @@ async function applyAcls({ videoRoot, configDir, logsDir, userName }) {
   return elevate.runElevated(calls);
 }
 
-async function removeAcls({ videoRoot, configDir, logsDir, userName }) {
+async function removeAcls({ videoRoots, configDir, logsDir, userName }) {
   if (process.platform !== 'win32') return { ok: true, steps: [] };
-  const targets = [videoRoot, configDir, logsDir, ...plexCandidates(), ...userDataCandidates()]
+  const roots = Array.isArray(videoRoots) ? videoRoots : [videoRoots];
+  const targets = [...roots, configDir, logsDir, ...plexCandidates(), ...userDataCandidates()]
     .filter(p => p && fs.existsSync(p));
   const calls = [];
   for (const p of targets) {

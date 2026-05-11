@@ -14,7 +14,7 @@ function bannerText(overall) {
 }
 
 function renderCards(state) {
-  const items = [state.local, state.tunnel, state.e2e, state.folder, state.hardening].filter(Boolean);
+  const items = [state.local, state.tunnel, state.e2e, ...(state.folders || []), state.hardening].filter(Boolean);
   $('cards').innerHTML = items.map(item => `
     <div class="card">
       <div class="title-row">
@@ -57,17 +57,42 @@ async function refresh() {
   await renderErrors();
 }
 
-async function changePassword() {
-  const pw = prompt('New team password (min 6 characters):');
-  if (!pw) return;
-  if (pw.length < 6) { alert('Too short.'); return; }
-  const confirm2 = prompt('Confirm password:');
-  if (pw !== confirm2) { alert('Passwords do not match.'); return; }
-  const { passwordHash } = await api.password.hash(pw);
-  await api.config.write({ passwordHash });
-  await api.services.restart('WaterboysVideoServer');
-  alert('Password updated. Server restarted.');
-  refresh();
+async function openPasswordModal() {
+  const summary = await api.config.summary();
+  const libs = summary.libraries || {};
+  const sel = $('pw-library');
+  sel.innerHTML = Object.entries(libs).map(([key, lib]) =>
+    `<option value="${escapeHtml(key)}">${escapeHtml(lib.label || key)}${lib.hasPassword ? '' : ' (no password set)'}</option>`
+  ).join('');
+  $('pw-new').value = '';
+  $('pw-confirm').value = '';
+  $('pw-modal').hidden = false;
+}
+
+function closePasswordModal() {
+  $('pw-modal').hidden = true;
+}
+
+async function savePassword() {
+  const libraryKey = $('pw-library').value;
+  const pw = $('pw-new').value;
+  const confirmPw = $('pw-confirm').value;
+  if (pw.length < 6) { alert('Password must be at least 6 characters.'); return; }
+  if (pw !== confirmPw) { alert('Passwords do not match.'); return; }
+  const btn = $('pw-save');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const r = await api.password.setForLibrary(libraryKey, pw);
+    if (!r.ok) { alert(`Save failed: ${r.error || ''}`); return; }
+    await api.services.restart('WaterboysVideoServer');
+    closePasswordModal();
+    alert('Password updated. Server restarted.');
+    refresh();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -86,7 +111,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     $('btn-restart-tunnel').disabled = false;
     refresh();
   };
-  $('btn-change-pw').onclick = changePassword;
+  $('btn-change-pw').onclick = openPasswordModal;
+  $('pw-cancel').onclick = closePasswordModal;
+  $('pw-save').onclick = savePassword;
   $('btn-wizard').onclick = () => api.app.openWizard();
   $('btn-logs').onclick = () => api.logs.openFolder();
   $('btn-uninstall').onclick = () => { $('uninstall-modal').hidden = false; };

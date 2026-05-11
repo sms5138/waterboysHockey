@@ -9,14 +9,20 @@ const STATE = {
 const STEPS = [
   { id: 'welcome',   title: 'Welcome',     render: renderWelcome },
   { id: 'prereqs',   title: 'Prereqs',     render: renderPrereqs },
-  { id: 'folder',    title: 'Video folder', render: renderFolder },
-  { id: 'password',  title: 'Password',    render: renderPassword },
+  { id: 'libraries', title: 'Libraries',   render: renderLibraries },
+  { id: 'passwords', title: 'Passwords',   render: renderPasswords },
   { id: 'network',   title: 'Network',     render: renderNetwork },
   { id: 'tunnel',    title: 'Tunnel',      render: renderTunnel },
   { id: 'services',  title: 'Services',    render: renderServices },
   { id: 'hardening', title: 'Hardening',   render: renderHardening },
   { id: 'verify',    title: 'Verify',      render: renderVerify }
 ];
+
+const LIBRARY_ORDER = ['waterboys', 'youth'];
+const LIBRARY_META = {
+  waterboys: { label: 'Waterboys', levels: ['Division', 'Season'], placeholder: 'D:\\Videos\\Waterboys Hockey' },
+  youth:     { label: 'Youth League', levels: ['League', 'Team', 'Season'], placeholder: 'D:\\Videos\\Youth' }
+};
 
 let current = null; // { validate, save } returned by render
 
@@ -158,74 +164,149 @@ async function renderPrereqs(el) {
   };
 }
 
-async function renderFolder(el, data) {
+async function renderLibraries(el, data) {
   const cfg = await api.config.read();
-  data.videoRoot = data.videoRoot || cfg.videoRoot || '';
-  el.innerHTML = panel('Where are your hockey videos?',
-    'This must be a folder on this computer. Subfolders below it become divisions and seasons in the website.',
-    `<div class="field">
-       <label for="videoRoot">Video folder</label>
-       <div class="row">
-         <input type="text" id="videoRoot" value="${escapeHtml(data.videoRoot)}" placeholder="C:\\Users\\sean\\Videos\\Hockey" />
-         <button class="secondary" id="btn-pick" style="flex: 0 0 auto">Browse…</button>
-       </div>
-       <div class="help">Expected layout: <code>&lt;Division&gt;/&lt;Season&gt;/*.mp4</code></div>
-     </div>`
+  data.libraries = data.libraries || {};
+  for (const key of LIBRARY_ORDER) {
+    const stored = (cfg.libraries && cfg.libraries[key]) || {};
+    data.libraries[key] = data.libraries[key] || { videoRoot: stored.videoRoot || '' };
+  }
+
+  const fields = LIBRARY_ORDER.map(key => {
+    const meta = LIBRARY_META[key];
+    const current = data.libraries[key].videoRoot;
+    return `
+      <div class="field">
+        <label for="root-${key}">${escapeHtml(meta.label)} folder <span class="muted">(${meta.levels.join(' → ')})</span></label>
+        <div class="row">
+          <input type="text" id="root-${key}" value="${escapeHtml(current)}" placeholder="${escapeHtml(meta.placeholder)}" />
+          <button class="secondary" id="btn-pick-${key}" style="flex: 0 0 auto">Browse…</button>
+        </div>
+        <div class="help">Expected layout: <code>${meta.levels.map(l => `&lt;${l}&gt;`).join('/')}/*.mp4</code>. Leave blank to skip this library.</div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = panel('Video libraries',
+    'Set the folder for each library you want to share. Each library uses a different password, and viewers only see the one they signed in to.',
+    fields
   );
 
-  document.getElementById('btn-pick').onclick = async () => {
-    const picked = await api.app.selectFolder(data.videoRoot);
-    if (picked) document.getElementById('videoRoot').value = picked;
-  };
+  for (const key of LIBRARY_ORDER) {
+    document.getElementById(`btn-pick-${key}`).onclick = async () => {
+      const current = document.getElementById(`root-${key}`).value;
+      const picked = await api.app.selectFolder(current);
+      if (picked) document.getElementById(`root-${key}`).value = picked;
+    };
+  }
 
   return {
     validate: async () => {
-      const v = document.getElementById('videoRoot').value.trim();
-      if (!v) { alert('Pick a folder.'); return false; }
-      data.videoRoot = v;
+      const values = {};
+      for (const key of LIBRARY_ORDER) {
+        values[key] = document.getElementById(`root-${key}`).value.trim();
+      }
+      const filled = Object.values(values).filter(Boolean);
+      if (filled.length === 0) {
+        alert('Set a folder for at least one library.');
+        return false;
+      }
+      data.libraries = {};
+      for (const key of LIBRARY_ORDER) {
+        data.libraries[key] = { videoRoot: values[key] };
+      }
       return true;
     },
     save: async () => {
-      await api.config.write({ videoRoot: data.videoRoot });
+      const partial = { libraries: {} };
+      for (const key of LIBRARY_ORDER) {
+        if (data.libraries[key].videoRoot) {
+          partial.libraries[key] = { videoRoot: data.libraries[key].videoRoot };
+        }
+      }
+      await api.config.write(partial);
     }
   };
 }
 
-async function renderPassword(el, data) {
+async function renderPasswords(el, data) {
   const summary = await api.config.summary();
-  el.innerHTML = panel('Team password',
-    summary.hasPassword
-      ? 'A password is already configured. Leave blank to keep it.'
-      : 'Pick the password your teammates will use to sign in to the site.',
-    `<div class="field">
-       <label for="pw1">Password${summary.hasPassword ? ' (leave blank to keep current)' : ''}</label>
-       <input type="password" id="pw1" autocomplete="new-password" />
-     </div>
-     <div class="field">
-       <label for="pw2">Confirm</label>
-       <input type="password" id="pw2" autocomplete="new-password" />
-     </div>
-     <p class="muted">Stored as a bcrypt hash; the plaintext is never written to disk.</p>`
+  data.passwords = data.passwords || {};
+
+  const activeLibraries = LIBRARY_ORDER.filter(key => {
+    // Skip a library that has neither a saved root nor one entered this session.
+    const stored = (summary.libraries && summary.libraries[key]) || {};
+    const inSession = (data.libraries && data.libraries[key] && data.libraries[key].videoRoot);
+    return inSession || stored.videoRoot;
+  });
+
+  if (activeLibraries.length === 0) {
+    el.innerHTML = panel('Passwords',
+      'No libraries are configured. Go back and set a video folder for at least one library.',
+      ''
+    );
+    return { validate: async () => false };
+  }
+
+  const fields = activeLibraries.map(key => {
+    const meta = LIBRARY_META[key];
+    const stored = (summary.libraries && summary.libraries[key]) || {};
+    const hint = stored.hasPassword
+      ? 'A password is already set. Leave blank to keep it.'
+      : 'Set the password viewers will use to sign in.';
+    return `
+      <fieldset class="field" style="border:1px solid var(--border,#2a3450); padding:12px; border-radius:8px; margin-bottom:12px">
+        <legend style="padding:0 6px"><strong>${escapeHtml(meta.label)}</strong></legend>
+        <p class="muted" style="margin-top:0">${hint}</p>
+        <div class="field">
+          <label for="pw-${key}-1">Password${stored.hasPassword ? ' (blank = keep current)' : ''}</label>
+          <input type="password" id="pw-${key}-1" autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label for="pw-${key}-2">Confirm</label>
+          <input type="password" id="pw-${key}-2" autocomplete="new-password" />
+        </div>
+      </fieldset>`;
+  }).join('');
+
+  el.innerHTML = panel('Library passwords',
+    'Each library has its own password. Viewers only see the library matching the password they sign in with.',
+    fields + `<p class="muted">Stored as bcrypt hashes; the plaintext is never written to disk.</p>`
   );
 
   return {
     validate: async () => {
-      const pw1 = document.getElementById('pw1').value;
-      const pw2 = document.getElementById('pw2').value;
-      if (!pw1 && summary.hasPassword) { data.skipPassword = true; return true; }
-      if (pw1.length < 6) { alert('Password must be at least 6 characters.'); return false; }
-      if (pw1 !== pw2) { alert('Passwords do not match.'); return false; }
-      data.password = pw1;
-      data.skipPassword = false;
+      data.passwords = {};
+      for (const key of activeLibraries) {
+        const pw1 = document.getElementById(`pw-${key}-1`).value;
+        const pw2 = document.getElementById(`pw-${key}-2`).value;
+        const stored = (summary.libraries && summary.libraries[key]) || {};
+        if (!pw1) {
+          if (!stored.hasPassword) {
+            alert(`${LIBRARY_META[key].label}: set a password.`);
+            return false;
+          }
+          continue;
+        }
+        if (pw1.length < 6) {
+          alert(`${LIBRARY_META[key].label}: password must be at least 6 characters.`);
+          return false;
+        }
+        if (pw1 !== pw2) {
+          alert(`${LIBRARY_META[key].label}: passwords do not match.`);
+          return false;
+        }
+        data.passwords[key] = pw1;
+      }
       return true;
     },
     save: async () => {
-      if (data.skipPassword) return;
-      const { passwordHash, jwtSecret } = await api.password.hash(data.password);
-      const existing = await api.config.read();
-      const partial = { passwordHash };
-      if (!existing.jwtSecret || existing.jwtSecret.length < 32) partial.jwtSecret = jwtSecret;
-      await api.config.write(partial);
+      for (const [key, plaintext] of Object.entries(data.passwords)) {
+        const r = await api.password.setForLibrary(key, plaintext);
+        if (!r.ok) {
+          alert(`Failed to save ${LIBRARY_META[key].label} password: ${r.error || ''}`);
+          throw new Error(r.error || 'password save failed');
+        }
+      }
     }
   };
 }
@@ -536,7 +617,7 @@ async function renderVerify(el) {
 
   const refresh = async () => {
     const s = await api.health.all();
-    const items = [s.local, s.tunnel, s.e2e, s.folder];
+    const items = [s.local, s.tunnel, s.e2e, ...(s.folders || [])];
     document.getElementById('verify-cards').innerHTML = items.map(item => `
       <div class="card" style="margin-bottom: 8px">
         <div class="title-row">

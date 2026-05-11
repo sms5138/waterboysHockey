@@ -26,7 +26,8 @@ contextBridge.exposeInMainWorld('api', {
     write:   (partial) => invoke('config:write', partial)
   },
   password: {
-    hash: (pwd) => invoke('password:hash', pwd)
+    hash: (pwd) => invoke('password:hash', pwd),
+    setForLibrary: (libraryKey, plaintext) => invoke('password:set-for-library', libraryKey, plaintext)
   },
   prereqs: {
     check:   () => invoke('prereqs:check'),

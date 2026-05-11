@@ -41,33 +41,34 @@ function listVideos(dir, allowedExts) {
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 }
 
-function buildTree(config) {
-  const { videoRoot, videoExtensions } = config;
-  const exts = videoExtensions.map(x => x.toLowerCase());
-
-  const divisions = listDirs(videoRoot).map(divName => {
-    const divPath = path.join(videoRoot, divName);
-    const seasons = listDirs(divPath).map(seasonName => {
-      const seasonPath = path.join(divPath, seasonName);
-      return {
-        name: seasonName,
-        type: 'season',
-        path: `${divName}/${seasonName}`,
-        children: listVideos(seasonPath, exts).map(v => ({
-          ...v,
-          path: `${divName}/${seasonName}/${v.name}`
-        }))
-      };
-    });
+// Recursively walks `levels.length` directory levels under `videoRoot`, then
+// lists videos at the leaf. Each intermediate node's `type` is taken from
+// `levels[depth]` (lowercased), so the frontend can label panes generically.
+function walk(dir, relPath, levels, depth, exts) {
+  if (depth >= levels.length) {
+    return listVideos(dir, exts).map(v => ({
+      ...v,
+      path: relPath ? `${relPath}/${v.name}` : v.name
+    }));
+  }
+  const levelType = String(levels[depth]).toLowerCase();
+  return listDirs(dir).map(name => {
+    const childRel = relPath ? `${relPath}/${name}` : name;
     return {
-      name: divName,
-      type: 'division',
-      path: divName,
-      children: seasons
+      name,
+      type: levelType,
+      path: childRel,
+      children: walk(path.join(dir, name), childRel, levels, depth + 1, exts)
     };
   });
+}
 
-  return divisions;
+function buildTree(library, videoExtensions) {
+  const exts = videoExtensions.map(x => x.toLowerCase());
+  const levels = Array.isArray(library.levels) && library.levels.length
+    ? library.levels
+    : ['Division', 'Season'];
+  return walk(library.videoRoot, '', levels, 0, exts);
 }
 
 module.exports = { buildTree };

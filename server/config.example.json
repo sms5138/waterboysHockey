@@ -1,10 +1,22 @@
 {
-  "videoRoot": "C:/Users/sean/Videos/Hockey",
   "port": 8088,
-  "passwordHash": "REPLACE_WITH_BCRYPT_HASH (run: npm run hash-password)",
-  "jwtSecret": "REPLACE_WITH_LONG_RANDOM_STRING (script will generate one)",
+  "jwtSecret": "REPLACE_WITH_LONG_RANDOM_STRING (the setup wizard will generate one)",
   "allowedOrigin": "https://waterboyshockey.com",
   "cookieDomain": "api.waterboyshockey.com",
   "videoExtensions": [".mp4", ".mov", ".mkv", ".m4v", ".webm"],
-  "tokenTtlHours": 12
+  "tokenTtlHours": 12,
+  "libraries": {
+    "waterboys": {
+      "label": "Waterboys",
+      "videoRoot": "C:/Users/sean/Videos/Waterboys Hockey",
+      "passwordHash": "REPLACE_WITH_BCRYPT_HASH (run: npm run hash-password)",
+      "levels": ["Division", "Season"]
+    },
+    "youth": {
+      "label": "Youth League",
+      "videoRoot": "C:/Users/sean/Videos/Youth",
+      "passwordHash": "REPLACE_WITH_BCRYPT_HASH (run: npm run hash-password)",
+      "levels": ["League", "Team", "Season"]
+    }
+  }
 }

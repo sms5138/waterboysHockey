@@ -8,6 +8,7 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     header: $('app-header'),
+    teamName: $('team-name'),
     loginView: $('login-view'),
     loginForm: $('login-form'),
     password: $('password'),
@@ -16,14 +17,7 @@
     signoutBtn: $('signout-btn'),
     browserView: $('browser-view'),
     breadcrumb: $('breadcrumb'),
-    paneDivisions: $('pane-divisions'),
-    paneSeasons: $('pane-seasons'),
-    paneVideos: $('pane-videos'),
-    listDivisions: $('list-divisions'),
-    listSeasons: $('list-seasons'),
-    listVideos: $('list-videos'),
-    seasonsTitle: $('seasons-title'),
-    videosTitle: $('videos-title'),
+    panes: $('panes'),
     playerOverlay: $('player-overlay'),
     player: $('player'),
     playerTitle: $('player-title'),
@@ -39,9 +33,11 @@
   // Drop any legacy token left behind from the pre-cookie release.
   try { localStorage.removeItem(LEGACY_TOKEN_KEY); } catch {}
 
-  let tree = null;
-  let currentDivision = null;
-  let currentSeason = null;
+  // Library metadata returned by /api/tree on login.
+  let library = null;       // { label, levels: [...] }
+  let rootChildren = [];    // top-level tree nodes
+  // crumbs[i] is the node selected at depth i. crumbs.length === current depth.
+  let crumbs = [];
   let statusTimer = null;
 
   function showStatus(msg) {
@@ -134,130 +130,132 @@
       await fetch(`${API}/api/logout`, { method: 'POST', credentials: 'include' });
     } catch { /* server unreachable; clear local state anyway */ }
     clearExpiresAt();
-    tree = null;
-    currentDivision = null;
-    currentSeason = null;
+    library = null;
+    rootChildren = [];
+    crumbs = [];
     showLogin();
   });
 
   async function loadTree() {
     try {
       const data = await api('/api/tree');
-      tree = data.children || [];
-      renderDivisions();
+      library = { label: data.label || 'WATERBOYS', levels: data.levels || ['Division', 'Season'] };
+      rootChildren = data.children || [];
+      crumbs = [];
+      if (els.teamName) els.teamName.textContent = library.label.toUpperCase();
+      renderLevel(0);
     } catch (err) {
       showStatus(`Couldn't load library: ${err.message}`);
     }
   }
 
+  function childrenAtDepth(depth) {
+    if (depth === 0) return rootChildren;
+    const parent = crumbs[depth - 1];
+    return (parent && parent.children) || [];
+  }
+
+  function isLeafDepth(depth) {
+    return depth >= (library ? library.levels.length : 2);
+  }
+
   function renderBreadcrumb() {
-    const parts = [];
-    parts.push(`<button data-nav="root">Home</button>`);
-    if (currentDivision) {
+    const parts = [`<button data-depth="0">Home</button>`];
+    for (let i = 0; i < crumbs.length; i++) {
       parts.push(`<span class="sep">/</span>`);
-      parts.push(`<button data-nav="division">${escapeHtml(currentDivision.name)}</button>`);
-    }
-    if (currentSeason) {
-      parts.push(`<span class="sep">/</span>`);
-      parts.push(`<span>${escapeHtml(currentSeason.name)}</span>`);
+      // Last crumb is the current position — non-clickable. Earlier crumbs jump back to that depth.
+      if (i === crumbs.length - 1 && isLeafDepth(crumbs.length)) {
+        parts.push(`<span>${escapeHtml(crumbs[i].name)}</span>`);
+      } else if (i === crumbs.length - 1) {
+        parts.push(`<span>${escapeHtml(crumbs[i].name)}</span>`);
+      } else {
+        parts.push(`<button data-depth="${i + 1}">${escapeHtml(crumbs[i].name)}</button>`);
+      }
     }
     els.breadcrumb.innerHTML = parts.join('');
-    els.breadcrumb.querySelectorAll('button').forEach(btn => {
+    els.breadcrumb.querySelectorAll('button[data-depth]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const target = btn.dataset.nav;
-        if (target === 'root') {
-          currentDivision = null;
-          currentSeason = null;
-          renderDivisions();
-        } else if (target === 'division') {
-          currentSeason = null;
-          renderSeasons();
-        }
+        const depth = parseInt(btn.dataset.depth, 10);
+        crumbs = crumbs.slice(0, depth);
+        renderLevel(depth);
       });
     });
   }
 
-  function renderDivisions() {
-    currentDivision = null;
-    currentSeason = null;
-    els.paneDivisions.hidden = false;
-    els.paneSeasons.hidden = true;
-    els.paneVideos.hidden = true;
+  function renderLevel(depth) {
+    if (!library) return;
+    const items = childrenAtDepth(depth);
+    const atLeaf = isLeafDepth(depth);
     renderBreadcrumb();
 
-    if (!tree || tree.length === 0) {
-      els.listDivisions.innerHTML = `<li class="empty">No divisions found.</li>`;
+    // Single-pane mode: always show only the pane for `depth`. Avoids horizontal
+    // sprawl as level count grows and matches mobile UX.
+    const labels = library.levels;
+    const heading = atLeaf
+      ? 'Videos'
+      : (labels[depth] ? `${labels[depth]}${pluralize(labels[depth])}` : 'Items');
+
+    if (atLeaf) {
+      els.panes.innerHTML = `
+        <section class="pane">
+          <h2>${escapeHtml(heading)}</h2>
+          <ul class="list video-list" id="dyn-list"></ul>
+        </section>`;
+      renderVideos(items);
       return;
     }
 
-    els.listDivisions.innerHTML = '';
-    for (const div of tree) {
+    els.panes.innerHTML = `
+      <section class="pane">
+        <h2>${escapeHtml(heading)}</h2>
+        <ul class="list" id="dyn-list"></ul>
+      </section>`;
+    renderFolders(items, depth);
+  }
+
+  function pluralize(word) {
+    if (!word) return '';
+    if (/s$/i.test(word)) return '';
+    return 's';
+  }
+
+  function renderFolders(items, depth) {
+    const list = document.getElementById('dyn-list');
+    if (!items || items.length === 0) {
+      const nextLabel = library.levels[depth] || 'items';
+      list.innerHTML = `<li class="empty">No ${escapeHtml(nextLabel.toLowerCase())}${pluralize(nextLabel.toLowerCase())} found.</li>`;
+      return;
+    }
+    list.innerHTML = '';
+    for (const node of items) {
       const li = document.createElement('li');
       li.className = 'folder';
-      const seasonCount = (div.children || []).length;
+      const childCount = (node.children || []).length;
+      const childLabel = isLeafDepth(depth + 1)
+        ? `${childCount} video${childCount === 1 ? '' : 's'}`
+        : `${childCount} ${(library.levels[depth + 1] || 'item').toLowerCase()}${childCount === 1 ? '' : 's'}`;
       li.innerHTML = `
         <div>
-          <div class="name">${escapeHtml(div.name)}</div>
-          <div class="meta">${seasonCount} season${seasonCount === 1 ? '' : 's'}</div>
+          <div class="name">${escapeHtml(node.name)}</div>
+          <div class="meta">${childLabel}</div>
         </div>
         <span aria-hidden="true">›</span>`;
       li.addEventListener('click', () => {
-        currentDivision = div;
-        renderSeasons();
+        crumbs = crumbs.slice(0, depth);
+        crumbs.push(node);
+        renderLevel(depth + 1);
       });
-      els.listDivisions.appendChild(li);
+      list.appendChild(li);
     }
   }
 
-  function renderSeasons() {
-    if (!currentDivision) return renderDivisions();
-    currentSeason = null;
-    els.paneDivisions.hidden = true;
-    els.paneSeasons.hidden = false;
-    els.paneVideos.hidden = true;
-    els.seasonsTitle.textContent = `${currentDivision.name} — Seasons`;
-    renderBreadcrumb();
-
-    const seasons = currentDivision.children || [];
-    if (seasons.length === 0) {
-      els.listSeasons.innerHTML = `<li class="empty">No seasons in this division yet.</li>`;
+  function renderVideos(videos) {
+    const list = document.getElementById('dyn-list');
+    if (!videos || videos.length === 0) {
+      list.innerHTML = `<li class="empty">No videos here yet.</li>`;
       return;
     }
-
-    els.listSeasons.innerHTML = '';
-    for (const season of seasons) {
-      const li = document.createElement('li');
-      li.className = 'folder';
-      const count = (season.children || []).length;
-      li.innerHTML = `
-        <div>
-          <div class="name">${escapeHtml(season.name)}</div>
-          <div class="meta">${count} video${count === 1 ? '' : 's'}</div>
-        </div>
-        <span aria-hidden="true">›</span>`;
-      li.addEventListener('click', () => {
-        currentSeason = season;
-        renderVideos();
-      });
-      els.listSeasons.appendChild(li);
-    }
-  }
-
-  function renderVideos() {
-    if (!currentSeason) return renderSeasons();
-    els.paneDivisions.hidden = true;
-    els.paneSeasons.hidden = true;
-    els.paneVideos.hidden = false;
-    els.videosTitle.textContent = `${currentDivision.name} / ${currentSeason.name}`;
-    renderBreadcrumb();
-
-    const videos = currentSeason.children || [];
-    if (videos.length === 0) {
-      els.listVideos.innerHTML = `<li class="empty">No videos in this season yet.</li>`;
-      return;
-    }
-
-    els.listVideos.innerHTML = '';
+    list.innerHTML = '';
     for (const v of videos) {
       const li = document.createElement('li');
       li.innerHTML = `
@@ -271,7 +269,7 @@
         </div>`;
       li.querySelector('.play').addEventListener('click', () => playVideo(v));
       li.querySelector('.download').addEventListener('click', () => downloadVideo(v));
-      els.listVideos.appendChild(li);
+      list.appendChild(li);
     }
   }
 

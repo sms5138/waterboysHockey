@@ -134,6 +134,29 @@ function registerIpc() {
     return { passwordHash, jwtSecret: password.newJwtSecret() };
   });
 
+  // Hashes the given plaintext and stores it under libraries[libraryKey].
+  // Used by the dashboard's Change Password modal and the wizard's per-library
+  // password fields. Returns { ok } so callers don't have to read config back.
+  ipcMain.handle('password:set-for-library', async (_e, libraryKey, plaintext) => {
+    if (!libraryKey || typeof libraryKey !== 'string') {
+      return { ok: false, error: 'libraryKey required' };
+    }
+    if (typeof plaintext !== 'string' || plaintext.length < 6) {
+      return { ok: false, error: 'password must be at least 6 characters' };
+    }
+    const cfg = config.read();
+    if (!cfg.libraries || !cfg.libraries[libraryKey]) {
+      return { ok: false, error: `unknown library: ${libraryKey}` };
+    }
+    const { passwordHash } = await password.hash(plaintext);
+    const partial = { libraries: { [libraryKey]: { passwordHash } } };
+    if (!cfg.jwtSecret || cfg.jwtSecret.length < 32) {
+      partial.jwtSecret = password.newJwtSecret();
+    }
+    config.write(partial);
+    return { ok: true };
+  });
+
   ipcMain.handle('prereqs:check',   () => prereqs.check());
   ipcMain.handle('prereqs:install', (_e, key) => prereqs.install(key));
 
@@ -190,7 +213,7 @@ function registerIpc() {
   ipcMain.handle('hardening:apply-acls', async () => {
     const cfg = config.read();
     const r = await acls.applyAcls({
-      videoRoot: cfg.videoRoot,
+      videoRoots: Object.values(cfg.libraries || {}).map(l => l.videoRoot).filter(Boolean),
       configDir: paths.configDir(),
       logsDir:   paths.logsDir(),
       userName:  services.SERVICE_USER
@@ -275,7 +298,7 @@ function registerIpc() {
     }
     if (options.restorePermissions) {
       await runStep('Restore NTFS permissions', () => acls.removeAcls({
-        videoRoot: config.read().videoRoot,
+        videoRoots: Object.values(config.read().libraries || {}).map(l => l.videoRoot).filter(Boolean),
         configDir: paths.configDir(),
         logsDir:   paths.logsDir(),
         userName:  services.SERVICE_USER

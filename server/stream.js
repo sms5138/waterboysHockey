@@ -18,11 +18,11 @@ function isAllowedExt(file, allowedExts) {
   return allowedExts.includes(path.extname(file).toLowerCase());
 }
 
-function sendFile(req, res, config, { asAttachment }) {
+function sendFile(req, res, videoRoot, videoExtensions, { asAttachment }) {
   const requested = req.query.path;
-  const full = resolveSafe(config.videoRoot, requested);
+  const full = resolveSafe(videoRoot, requested);
   if (!full) return res.status(403).json({ error: 'invalid path' });
-  if (!isAllowedExt(full, config.videoExtensions.map(e => e.toLowerCase()))) {
+  if (!isAllowedExt(full, videoExtensions.map(e => e.toLowerCase()))) {
     return res.status(403).json({ error: 'file type not allowed' });
   }
 

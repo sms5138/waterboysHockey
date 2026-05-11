@@ -3,9 +3,9 @@ const jwt = require('jsonwebtoken');
 
 const COOKIE_NAME = 'waterboys_session';
 
-function issueToken(config) {
+function issueToken(config, libraryKey) {
   const ttlSeconds = (config.tokenTtlHours || 12) * 3600;
-  const token = jwt.sign({ scope: 'team' }, config.jwtSecret, {
+  const token = jwt.sign({ scope: 'team', library: libraryKey }, config.jwtSecret, {
     algorithm: 'HS256',
     expiresIn: ttlSeconds
   });
@@ -56,12 +56,23 @@ function requireAuth(config) {
     }
     if (!token) return res.status(401).json({ error: 'missing token' });
 
+    let claims;
     try {
-      jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] });
-      next();
+      claims = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] });
     } catch {
-      res.status(401).json({ error: 'invalid token' });
+      return res.status(401).json({ error: 'invalid token' });
     }
+
+    // Legacy tokens (issued before dual-library) have no library claim — treat
+    // them as the Waterboys session for one TTL cycle so existing logins don't
+    // bounce out on first deploy.
+    const libraryKey = claims.library || 'waterboys';
+    const library = config.libraries && config.libraries[libraryKey];
+    if (!library) return res.status(401).json({ error: 'unknown library' });
+
+    req.libraryKey = libraryKey;
+    req.library = library;
+    next();
   };
 }
 

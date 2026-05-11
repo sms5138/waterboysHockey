@@ -62,32 +62,41 @@ async function endToEnd() {
   };
 }
 
-async function videoFolder() {
-  const cfg = config.read();
-  if (!cfg.videoRoot) {
-    return { label: 'Video folder', state: 'missing', detail: 'not configured' };
-  }
-  if (!fs.existsSync(cfg.videoRoot)) {
-    return { label: 'Video folder', state: 'down', detail: `does not exist: ${cfg.videoRoot}` };
-  }
+function countVideos(root, exts) {
   let count = 0;
-  const exts = (cfg.videoExtensions || []).map(e => e.toLowerCase());
+  const lower = exts.map(e => e.toLowerCase());
   const walk = (dir, depth) => {
-    if (depth > 3) return;
+    if (depth > 4) return;
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) walk(p, depth + 1);
-      else if (e.isFile() && exts.includes(path.extname(e.name).toLowerCase())) count++;
+      else if (e.isFile() && lower.includes(path.extname(e.name).toLowerCase())) count++;
     }
   };
-  walk(cfg.videoRoot, 0);
-  return {
-    label: 'Video folder',
-    state: count > 0 ? 'ok' : 'warn',
-    detail: `${count} video file${count === 1 ? '' : 's'} in ${cfg.videoRoot}`
-  };
+  walk(root, 0);
+  return count;
+}
+
+async function videoFolders() {
+  const cfg = config.read();
+  return Object.entries(cfg.libraries).map(([key, lib]) => {
+    const label = `${lib.label} videos`;
+    if (!lib.videoRoot) {
+      return { label, state: 'missing', detail: 'not configured', libraryKey: key };
+    }
+    if (!fs.existsSync(lib.videoRoot)) {
+      return { label, state: 'down', detail: `does not exist: ${lib.videoRoot}`, libraryKey: key };
+    }
+    const count = countVideos(lib.videoRoot, cfg.videoExtensions || []);
+    return {
+      label,
+      state: count > 0 ? 'ok' : 'warn',
+      detail: `${count} video file${count === 1 ? '' : 's'} in ${lib.videoRoot}`,
+      libraryKey: key
+    };
+  });
 }
 
 async function hardeningCheck() {
@@ -115,18 +124,19 @@ async function hardeningCheck() {
 }
 
 async function all() {
-  const [local, tunnel, e2e, folder, hardening] = await Promise.all([
+  const [local, tunnel, e2e, folders, hardening] = await Promise.all([
     localServer(),
     tunnelService(),
     endToEnd(),
-    videoFolder(),
+    videoFolders(),
     hardeningCheck()
   ]);
-  const states = [local.state, tunnel.state, e2e.state, folder.state, hardening.state];
+  const folderStates = folders.map(f => f.state);
+  const states = [local.state, tunnel.state, e2e.state, ...folderStates, hardening.state];
   let overall = 'ok';
   if (states.some(s => s === 'down')) overall = 'down';
   else if (states.some(s => s === 'warn' || s === 'missing')) overall = 'warn';
-  return { overall, local, tunnel, e2e, folder, hardening, at: new Date().toISOString() };
+  return { overall, local, tunnel, e2e, folders, hardening, at: new Date().toISOString() };
 }
 
-module.exports = { all, localServer, tunnelService, endToEnd, videoFolder, hardeningCheck };
+module.exports = { all, localServer, tunnelService, endToEnd, videoFolders, hardeningCheck };

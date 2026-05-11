@@ -20,17 +20,55 @@ if (!fs.existsSync(configPath)) {
   console.error(`config.json not found at ${configPath}. Run the Waterboys setup wizard, or copy config.example.json to config.json.`);
   process.exit(1);
 }
-const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
-for (const key of ['videoRoot', 'port', 'passwordHash', 'jwtSecret', 'allowedOrigin', 'videoExtensions']) {
+// Migrate pre-dual-library configs: { videoRoot, passwordHash, ... } gets
+// folded into libraries.waterboys with the original Division/Season layout.
+function migrateConfig(cfg) {
+  if (cfg.libraries && Object.keys(cfg.libraries).length > 0) return cfg;
+  if (cfg.videoRoot || cfg.passwordHash) {
+    const out = { ...cfg };
+    out.libraries = {
+      waterboys: {
+        label: 'Waterboys',
+        videoRoot: cfg.videoRoot || '',
+        passwordHash: cfg.passwordHash || '',
+        levels: ['Division', 'Season']
+      }
+    };
+    delete out.videoRoot;
+    delete out.passwordHash;
+    return out;
+  }
+  return cfg;
+}
+const config = migrateConfig(rawConfig);
+
+for (const key of ['port', 'jwtSecret', 'allowedOrigin', 'videoExtensions']) {
   if (!config[key]) {
     console.error(`config.json is missing required key: ${key}`);
     process.exit(1);
   }
 }
-if (!fs.existsSync(config.videoRoot)) {
-  console.error(`videoRoot does not exist: ${config.videoRoot}`);
+if (!config.libraries || Object.keys(config.libraries).length === 0) {
+  console.error('config.json must define at least one library under "libraries"');
   process.exit(1);
+}
+for (const [key, lib] of Object.entries(config.libraries)) {
+  for (const field of ['videoRoot', 'passwordHash', 'label', 'levels']) {
+    if (!lib[field]) {
+      console.error(`libraries.${key} is missing required field: ${field}`);
+      process.exit(1);
+    }
+  }
+  if (!Array.isArray(lib.levels) || lib.levels.length === 0) {
+    console.error(`libraries.${key}.levels must be a non-empty array`);
+    process.exit(1);
+  }
+  if (!fs.existsSync(lib.videoRoot)) {
+    console.error(`libraries.${key}.videoRoot does not exist: ${lib.videoRoot}`);
+    process.exit(1);
+  }
 }
 
 const app = express();
@@ -98,9 +136,18 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { password } = req.body || {};
-  const ok = await verifyPassword(password, config.passwordHash);
-  if (!ok) return res.status(401).json({ error: 'wrong password' });
-  const { token, expiresAt, ttlSeconds } = issueToken(config);
+  // Try every library's password. First match determines which library the
+  // session is scoped to. This is what enforces isolation: a session can only
+  // ever see the library whose password it presented.
+  let matched = null;
+  for (const [key, lib] of Object.entries(config.libraries)) {
+    if (await verifyPassword(password, lib.passwordHash)) {
+      matched = key;
+      break;
+    }
+  }
+  if (!matched) return res.status(401).json({ error: 'wrong password' });
+  const { token, expiresAt, ttlSeconds } = issueToken(config, matched);
   setSessionCookie(res, token, ttlSeconds, config);
   res.json({ expiresAt });
 });
@@ -111,15 +158,20 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/tree', requireAuth(config), (req, res) => {
-  res.json({ root: path.basename(config.videoRoot), children: buildTree(config) });
+  res.json({
+    label: req.library.label,
+    levels: req.library.levels,
+    root: path.basename(req.library.videoRoot),
+    children: buildTree(req.library, config.videoExtensions)
+  });
 });
 
 app.get('/api/file', requireAuth(config), (req, res) => {
-  sendFile(req, res, config, { asAttachment: false });
+  sendFile(req, res, req.library.videoRoot, config.videoExtensions, { asAttachment: false });
 });
 
 app.get('/api/download', requireAuth(config), (req, res) => {
-  sendFile(req, res, config, { asAttachment: true });
+  sendFile(req, res, req.library.videoRoot, config.videoExtensions, { asAttachment: true });
 });
 
 app.use((req, res) => res.status(404).json({ error: 'not found' }));
@@ -129,6 +181,8 @@ app.use((req, res) => res.status(404).json({ error: 'not found' }));
 // server to anyone else on the LAN.
 app.listen(config.port, '127.0.0.1', () => {
   console.log(`Waterboys video server listening on http://127.0.0.1:${config.port}`);
-  console.log(`Serving videos from: ${config.videoRoot}`);
+  for (const [key, lib] of Object.entries(config.libraries)) {
+    console.log(`Library ${key} (${lib.label}) [${lib.levels.join(' → ')}]: ${lib.videoRoot}`);
+  }
   console.log(`Allowed origin: ${config.allowedOrigin}`);
 });
