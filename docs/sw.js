@@ -1,7 +1,7 @@
 /* Waterboys Hockey — Service Worker
  * Pre-caches the app shell so Tools works offline at the rink.
  * Bump CACHE_VERSION on every release to purge stale assets. */
-const CACHE_VERSION = 'wbh-v3';
+const CACHE_VERSION = 'wbh-v4';
 
 const APP_SHELL = [
   './',

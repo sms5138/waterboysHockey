@@ -272,7 +272,7 @@
       const tr = document.createElement('tr');
       const posOptions = POSITIONS.map((v) => `<option value="${v}"${p.position === v ? ' selected' : ''}>${v}</option>`).join('');
       tr.innerHTML = `
-        <td><input type="number" min="0" max="99" value="${escapeHtml(p.number)}" data-field="number" aria-label="Number" /></td>
+        <td><input type="text" inputmode="numeric" pattern="[0-9]{1,2}" maxlength="2" value="${escapeHtml(p.number)}" data-field="number" aria-label="Number" /></td>
         <td><input type="text" value="${escapeHtml(p.name)}" data-field="name" placeholder="Player name" aria-label="Name" /></td>
         <td>
           <select data-field="position" aria-label="Position">${posOptions}</select>
@@ -281,9 +281,12 @@
       `;
       qq('[data-field]', tr).forEach((input) => {
         input.addEventListener('change', () => {
-          p[input.dataset.field] = input.dataset.field === 'number'
-            ? (input.value === '' ? '' : Number(input.value))
-            : input.value;
+          let v = input.value;
+          if (input.dataset.field === 'number') {
+            v = v.replace(/[^0-9]/g, '').slice(0, 2);
+            input.value = v;
+          }
+          p[input.dataset.field] = v;
           saveTeams();
           renderTeams();
         });
