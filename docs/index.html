@@ -7,6 +7,8 @@
   <meta name="theme-color" content="#041E42" />
   <meta name="description" content="Private game film library for the Waterboys Hockey Club." />
   <link rel="icon" href="assets/favicon.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -52,13 +54,138 @@
         <button type="submit" id="login-btn">Sign in</button>
         <p class="error" id="login-error" role="alert"></p>
       </form>
+      <button type="button" id="tools-btn" class="secondary-btn">Tools</button>
     </section>
+  </main>
+
+  <main id="tools-menu-view" hidden>
+    <section class="tools-card">
+      <h1 class="tools-title">Tools</h1>
+      <p class="tagline">Team &amp; roster builder</p>
+      <div class="tools-actions">
+        <button type="button" id="open-teams-btn" class="big-btn">Manage Teams</button>
+        <button type="button" id="open-roster-btn" class="big-btn">Create Roster</button>
+      </div>
+      <div class="tools-io">
+        <button type="button" id="import-btn" class="ghost-btn">Import JSON</button>
+        <button type="button" id="export-btn" class="ghost-btn">Export JSON</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden />
+      </div>
+      <button type="button" id="tools-back-login" class="link-btn">← Back to Login</button>
+    </section>
+  </main>
+
+  <main id="tools-teams-view" hidden>
+    <div class="tools-header">
+      <button type="button" class="link-btn" data-nav="tools-menu">← Tools</button>
+      <h2>Manage Teams</h2>
+    </div>
+    <div class="teams-layout">
+      <aside class="teams-list-panel">
+        <div class="panel-head">
+          <h3>Teams</h3>
+          <button type="button" id="new-team-btn" class="small-btn">+ New Team</button>
+        </div>
+        <ul id="teams-list" class="teams-list"></ul>
+      </aside>
+      <section class="team-detail-panel" id="team-detail">
+        <div class="empty-state" id="team-empty">Select or create a team to manage its roster.</div>
+      </section>
+    </div>
+  </main>
+
+  <main id="tools-roster-view" hidden>
+    <div class="tools-header">
+      <button type="button" class="link-btn" data-nav="tools-menu">← Tools</button>
+      <h2>Create Roster</h2>
+    </div>
+    <div class="roster-controls">
+      <label>Team
+        <select id="roster-team-select"></select>
+      </label>
+      <label>Date
+        <input type="date" id="roster-date" />
+      </label>
+      <div class="mode-toggle" role="group" aria-label="Input mode">
+        <button type="button" class="mode-btn" data-mode="drag">Drag</button>
+        <button type="button" class="mode-btn active" data-mode="tap">Tap</button>
+      </div>
+      <div class="roster-title" id="roster-title"></div>
+    </div>
+    <div class="saved-rosters-strip" id="saved-rosters-strip"></div>
+    <div class="roster-builder">
+      <aside class="player-pool-panel">
+        <div class="panel-head">
+          <h3>Players</h3>
+          <div class="pool-filters">
+            <button type="button" class="filter-btn active" data-filter="ALL">All</button>
+            <button type="button" class="filter-btn" data-filter="LW">LW</button>
+            <button type="button" class="filter-btn" data-filter="C">C</button>
+            <button type="button" class="filter-btn" data-filter="RW">RW</button>
+            <button type="button" class="filter-btn" data-filter="LD">LD</button>
+            <button type="button" class="filter-btn" data-filter="RD">RD</button>
+            <button type="button" class="filter-btn" data-filter="G">G</button>
+          </div>
+        </div>
+        <ul id="player-pool" class="player-pool"></ul>
+      </aside>
+      <section class="rink-panel">
+        <div class="rink-section forwards">
+          <div class="rink-section-head">
+            <h3>Forwards</h3>
+            <button type="button" id="add-forward-line" class="small-btn">+ Add Line</button>
+          </div>
+          <div id="forward-lines" class="lines-grid"></div>
+        </div>
+        <div class="rink-section defense">
+          <div class="rink-section-head">
+            <h3>Defense</h3>
+            <button type="button" id="add-defense-line" class="small-btn">+ Add Line</button>
+          </div>
+          <div id="defense-lines" class="lines-grid"></div>
+        </div>
+        <div class="rink-section goalies">
+          <div class="rink-section-head"><h3>Goalies</h3></div>
+          <div class="goalie-slots">
+            <div class="goalie-slot">
+              <div class="goalie-label">Primary</div>
+              <div class="slot goalie" data-slot="goalie-primary"></div>
+            </div>
+            <div class="goalie-slot">
+              <div class="goalie-label">Alternate</div>
+              <div class="slot goalie" data-slot="goalie-alternate"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="roster-actions">
+      <span id="roster-dirty-flag" class="dirty-flag" hidden>Unsaved changes</span>
+      <button type="button" id="save-roster-btn" class="small-btn">Save</button>
+      <button type="button" id="export-pdf-btn" class="small-btn">Export PDF</button>
+      <button type="button" id="delete-roster-btn" class="danger-btn">Delete Roster</button>
+    </div>
   </main>
 
   <main id="browser-view" hidden>
     <nav class="breadcrumb" id="breadcrumb"></nav>
     <div id="panes"></div>
   </main>
+
+  <div id="picker-overlay" class="picker-overlay" hidden>
+    <div class="picker-shell" role="dialog" aria-labelledby="picker-title">
+      <div class="picker-header">
+        <span id="picker-title">Choose player</span>
+        <button type="button" id="picker-close" aria-label="Close picker">✕</button>
+      </div>
+      <div class="picker-body">
+        <ul id="picker-list" class="picker-list"></ul>
+      </div>
+      <div class="picker-footer">
+        <button type="button" id="picker-clear" class="ghost-btn">Clear slot</button>
+      </div>
+    </div>
+  </div>
 
   <div id="player-overlay" hidden>
     <div class="player-shell">
@@ -74,5 +201,16 @@
 
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <script src="vendor/sortable.min.js"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="vendor/html2canvas.min.js"></script>
+  <script src="tools.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => { /* offline install failed; site still works online */ });
+      });
+    }
+  </script>
 </body>
 </html>

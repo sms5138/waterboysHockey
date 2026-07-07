@@ -79,9 +79,17 @@
     return res.json();
   }
 
+  function hideToolsViews() {
+    for (const id of ['tools-menu-view', 'tools-teams-view', 'tools-roster-view']) {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    }
+  }
+
   function showLogin() {
     els.header.hidden = true;
     els.browserView.hidden = true;
+    hideToolsViews();
     els.loginView.hidden = false;
     els.password.value = '';
     els.loginError.textContent = '';
@@ -91,6 +99,7 @@
   function showBrowser() {
     els.header.hidden = false;
     els.loginView.hidden = true;
+    hideToolsViews();
     els.browserView.hidden = false;
   }
 
